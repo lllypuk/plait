@@ -210,7 +210,7 @@ agents:
 **Команды установки:**
 
 - `plait setup` — разработчик, один раз. Находит установленных агентов, ставит skills в user-scope, прописывает правила разрешений, запускает `doctor`. Флаги: `--agent`, `--scope user|project`, `--dry-run`, `--uninstall`.
-- `plait init` — тимлид, один раз на репо. Создаёт `.plait/config.yaml`, project-skills в `.agents/skills/` и `.claude/skills/`, секцию в `AGENTS.md` с импортом в `CLAUDE.md`/`GEMINI.md`.
+- `plait init` — тимлид, один раз на репо. Создаёт `.plait/config.yaml`, project-skills и правила запрета для всех агентов, секцию в `AGENTS.md` с импортом `@AGENTS.md` в их контекст-файлы, строки `.gitignore`, скрывающие `.plait/runs`.
 - `plait doctor` — версии агентов, совпадение версий skills и бинаря, прокси/CA, доступность endpoint'ов и GitLab/GitHub API.
 
 ## Взаимодействие агентов

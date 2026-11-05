@@ -1,0 +1,62 @@
+# outside a git repository init refuses
+exitcode 2 plait init --json
+stdout '"code":"not_a_repository"'
+! exists .plait
+
+mkdir repo
+cd repo
+exec git init -q
+cp ../team-agents.md AGENTS.md
+
+# dry run plans every file and writes nothing
+exec plait init --dry-run --json
+stdout '"dry_run":true'
+stdout '"agents":\["claude","qwen"\]'
+stdout '"action":"create","path":".plait/config.yaml","item":"config"'
+stdout '"action":"update","path":"AGENTS.md","item":"agents section"'
+stdout '"action":"create","path":"CLAUDE.md","agent":"claude","item":"import","detail":"@AGENTS.md"'
+stdout '"changed":false'
+! exists .plait
+! exists CLAUDE.md
+
+# init connects the repository; foreign text in AGENTS.md stays
+exec plait init --json
+stdout '"changed":true'
+exists .plait/config.yaml
+exists .claude/skills/plait-review/SKILL.md
+exists .qwen/skills/plait/SKILL.md
+grep 'Bash\(plait approve:\*\)' .claude/settings.json
+grep '^# Team rules$' AGENTS.md
+grep '^<!-- plait:begin -->$' AGENTS.md
+grep '^@AGENTS.md$' CLAUDE.md
+grep '^@AGENTS.md$' QWEN.md
+
+# repeating it changes nothing
+exec plait init --json
+stdout '"changed":false'
+! stdout '"action":"(create|update)"'
+
+# runs stay out of git, the team files go in
+exec plait run new first --key PROJ-1
+exists .plait/runs/PROJ-1-first/state.json
+exec git status --porcelain --untracked-files=all
+cmp stdout ../status.txt
+
+-- team-agents.md --
+# Team rules
+
+Run make check before commit.
+-- status.txt --
+?? .claude/settings.json
+?? .claude/skills/plait-mr/SKILL.md
+?? .claude/skills/plait-review/SKILL.md
+?? .claude/skills/plait/SKILL.md
+?? .gitignore
+?? .plait/config.yaml
+?? .qwen/settings.json
+?? .qwen/skills/plait-mr/SKILL.md
+?? .qwen/skills/plait-review/SKILL.md
+?? .qwen/skills/plait/SKILL.md
+?? AGENTS.md
+?? CLAUDE.md
+?? QWEN.md

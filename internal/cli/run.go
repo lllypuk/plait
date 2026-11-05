@@ -134,25 +134,31 @@ func (a *app) store() (*run.Store, error) {
 
 // repoRoot is the nearest ancestor holding .git, or the working directory outside a repository.
 func (a *app) repoRoot() (string, error) {
+	root, _, err := a.gitRoot()
+	return root, err
+}
+
+// gitRoot is the nearest ancestor holding .git; outside a repository it is the working directory and false.
+func (a *app) gitRoot() (string, bool, error) {
 	dir := a.opts.Dir
 	if dir == "" {
 		wd, err := os.Getwd()
 		if err != nil {
-			return "", output.Internal(fmt.Errorf("get working directory: %w", err))
+			return "", false, output.Internal(fmt.Errorf("get working directory: %w", err))
 		}
 		dir = wd
 	}
 	for d := dir; ; {
 		_, err := os.Stat(filepath.Join(d, ".git"))
 		if err == nil {
-			return d, nil
+			return d, true, nil
 		}
 		if !errors.Is(err, fs.ErrNotExist) {
-			return "", output.Internal(fmt.Errorf("find repository root: %w", err))
+			return "", false, output.Internal(fmt.Errorf("find repository root: %w", err))
 		}
 		parent := filepath.Dir(d)
 		if parent == d {
-			return dir, nil
+			return dir, false, nil
 		}
 		d = parent
 	}

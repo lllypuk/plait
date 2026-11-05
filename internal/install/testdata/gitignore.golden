@@ -1,0 +1,3 @@
+/.plait/*
+!/.plait/config.yaml
+!/.plait/rules.md

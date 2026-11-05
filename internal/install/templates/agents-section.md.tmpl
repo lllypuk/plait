@@ -1,0 +1,8 @@
+## plait
+
+This repository works through plait: it leads each task through the team dev-flow.
+
+- Start a task with `plait next --json` and do what `do` says; `plait guide <stage>` explains a step.
+- Call only the plait commands listed in `allowed`; on exit code 4 stop and show the error to the developer.
+- Never run `plait approve` or `plait reject`: they belong to the developer.
+- Do not edit `.plait/runs/` by hand: plait commands write it.

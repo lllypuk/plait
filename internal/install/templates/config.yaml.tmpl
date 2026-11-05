@@ -1,0 +1,24 @@
+# plait settings of this repository, committed for the whole team; created by plait {{.Version}}.
+# Layers, later wins: /etc/plait/config.yaml, ~/.config/plait/config.yaml, this file, PLAIT_* env, flags.
+# Uncomment what the team changes; the values shown are the defaults.
+
+# review:
+#   # Empty: origin/HEAD, then main, then master.
+#   base: ""
+#   # Team rules the reviewer reads.
+#   rules: [AGENTS.md, CLAUDE.md, .plait/rules.md]
+#   # Larger diffs drop whole files, biggest first.
+#   max_diff_bytes: 524288
+#   # Checks expected before review, e.g. [test, lint].
+#   checks: []
+
+# mr:
+#   # Repository path to a custom text/template; empty uses the built-in one.
+#   template: ""
+
+# Agents in plait-agent/v1 by name: override a built-in one field by field,
+# or describe a new one; base: <agent> takes another agent's fields first.
+# agents:
+#   my-agent:
+#     base: claude
+#     cmd: my-agent

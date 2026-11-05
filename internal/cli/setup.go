@@ -52,9 +52,9 @@ func (a *app) newSetupCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			text := setupText(data)
+			text := opsText(data.Ops, data.DryRun, data.Changed, "done; restart the agent sessions to load the skills")
 			if conflicts := opsWith(data.Ops, install.ActionConflict); len(conflicts) > 0 {
-				e := conflictError(conflicts)
+				e := conflictError(conflicts, "plait setup")
 				e.Data, e.Text = data, text
 				return e
 			}
@@ -159,7 +159,7 @@ func opsWith(ops []install.Op, action install.Action) []install.Op {
 	return out
 }
 
-func conflictError(conflicts []install.Op) *output.Error {
+func conflictError(conflicts []install.Op, rerun string) *output.Error {
 	paths := make([]string, len(conflicts))
 	for i, op := range conflicts {
 		paths[i] = op.Path
@@ -171,13 +171,14 @@ func conflictError(conflicts []install.Op) *output.Error {
 	return output.NeedsHuman("install_conflict",
 		fmt.Sprintf("%d %s left in place: %s", len(paths), verb, strings.Join(paths, ", ")),
 		"ask the developer whether to move these files away; plait does not overwrite them. "+
-			"The other operations are done; rerun plait setup after the files are moved")
+			"The other operations are done; rerun "+rerun+" after the files are moved")
 }
 
-func setupText(d setupData) string {
+// opsText prints one operation per line and then the outcome, done when something changed.
+func opsText(ops []install.Op, dryRun, changed bool, done string) string {
 	var b strings.Builder
 	tw := tabwriter.NewWriter(&b, 0, 0, columnGap, ' ', 0)
-	for _, op := range d.Ops {
+	for _, op := range ops {
 		line := strings.Join([]string{string(op.Action), op.Agent, op.Item, op.Path}, "\t")
 		if op.Detail != "" {
 			line += "\t" + op.Detail
@@ -186,10 +187,10 @@ func setupText(d setupData) string {
 	}
 	_ = tw.Flush()
 	switch {
-	case d.DryRun:
+	case dryRun:
 		b.WriteString("dry run: nothing written")
-	case d.Changed:
-		b.WriteString("done; restart the agent sessions to load the skills")
+	case changed:
+		b.WriteString(done)
 	default:
 		b.WriteString("nothing changed")
 	}

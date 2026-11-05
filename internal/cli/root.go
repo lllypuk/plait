@@ -66,7 +66,7 @@ func (a *app) newRoot() *cobra.Command {
 	}
 	root.PersistentFlags().BoolVar(&a.json, "json", false, "print the JSON envelope even on a terminal")
 	root.AddCommand(a.newVersionCmd(), a.newRunCmd(), a.newNextCmd(), a.newCtxCmd(), a.newCheckCmd(), a.newReviewCmd(),
-		a.newMRCmd(), a.newGuideCmd(), a.newSetupCmd())
+		a.newMRCmd(), a.newGuideCmd(), a.newSetupCmd(), a.newInitCmd())
 	return root
 }
 
