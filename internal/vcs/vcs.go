@@ -402,3 +402,15 @@ func (r Repo) git(ctx context.Context, env []string, args ...string) (string, er
 	}
 	return stdout.String(), nil
 }
+
+// Ignored reports whether git ignores path, given relative to the root, whether or not it exists.
+func (r Repo) Ignored(ctx context.Context, path string) (bool, error) {
+	_, err := r.git(ctx, nil, "check-ignore", "-q", "--no-index", "--", path)
+	if err == nil {
+		return true, nil
+	}
+	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok && exitErr.ExitCode() == 1 {
+		return false, nil
+	}
+	return false, err
+}

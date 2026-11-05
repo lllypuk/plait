@@ -26,9 +26,10 @@ const envPrefix = "PLAIT_"
 
 // Config is the merged plait configuration.
 type Config struct {
-	Review Review `yaml:"review"`
-	Audit  Audit  `yaml:"audit"`
-	MR     MR     `yaml:"mr"`
+	Review  Review  `yaml:"review"`
+	Audit   Audit   `yaml:"audit"`
+	MR      MR      `yaml:"mr"`
+	Network Network `yaml:"network"`
 	// Agents holds raw plait-agent/v1 descriptors; agent.Load resolves them, env and flags do not set them.
 	Agents map[string]map[string]any `yaml:"agents"`
 }
@@ -49,6 +50,12 @@ type Audit struct {
 // MR configures mr describe.
 type MR struct {
 	Template string `yaml:"template"`
+}
+
+// Network configures the connections plait makes and checks.
+type Network struct {
+	// CAFile is a PEM bundle added to the system pool; a relative path starts at the repository root.
+	CAFile string `yaml:"ca_file"`
 }
 
 // Sources lists the layers in ascending priority; a missing or empty file path is skipped.

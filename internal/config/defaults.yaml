@@ -11,6 +11,9 @@ audit:
 mr:
   # Repository path to a custom text/template; empty uses the built-in one.
   template: ""
+network:
+  # PEM file with the corporate CA, added to the system pool; relative to the repository root. Empty: SSL_CERT_FILE.
+  ca_file: ""
 # Agents in plait-agent/v1 by name: override a built-in one (claude, qwen) field by field,
 # or describe a new one; base: <agent> takes another agent's fields first.
 agents: {}

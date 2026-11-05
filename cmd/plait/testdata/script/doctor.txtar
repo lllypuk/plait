@@ -1,0 +1,56 @@
+# fake agents in an isolated PATH and HOME; GITBIN brings git without the agents of the developer
+chmod 755 bin/claude
+chmod 755 bin/qwen
+env HOME=$WORK/home
+
+# without agents and outside a repository nothing fails: those checks are skipped with a warning
+env PATH=$WORK/empty${:}$PLAITBIN
+exec plait doctor --json
+stdout '^\{"ok":true,"data":\{"checks":\[\{"name":"plait","status":"ok","detail":"[^"]+"\}'
+stdout '"name":"agent claude","status":"warn","detail":"claude is not in PATH; its checks are skipped"'
+stdout '"name":"repository","status":"warn"'
+stdout '"name":"proxy","status":"ok"'
+stdout '"name":"ca","status":"ok","detail":"system certificate pool"'
+
+# an agent without skills and deny rules fails with exit 4; each failed check says how to fix it
+env PATH=$WORK/bin${:}$GITBIN${:}$PLAITBIN
+exitcode 4 plait doctor --json
+stdout '^\{"ok":false,"error":\{"code":"doctor_failed","message":"4 of \d+ checks failed: skills claude, deny rules claude, skills qwen, deny rules qwen"'
+stdout '"name":"agent claude","status":"ok","detail":"2.1.0 \(Claude Code\) at [^"]+/bin/claude"'
+stdout '"name":"skills claude","status":"fail","detail":"no plait skills in [^"]+","fix":"run plait setup --agent claude"'
+stdout '"name":"telemetry qwen","status":"warn"'
+
+# setup installs and then prints the same checks for its agents
+exec plait setup --agent qwen --json
+stdout '"checks":\[\{"name":"plait"'
+stdout '"name":"skills qwen","status":"ok","detail":"user: plait [^"]+"'
+stdout '"name":"deny rules qwen","status":"ok"'
+! stdout '"name":"agent claude"'
+exec plait setup --json
+stdout '"name":"skills claude","status":"ok"'
+
+# in a repository connected by init, with telemetry off and a corporate CA, everything is ok
+mkdir repo
+cd repo
+exec git init -q
+exitcode 0 plait init --json
+env DISABLE_TELEMETRY=1
+env SSL_CERT_FILE=$WORK/ca.pem
+exitcode 4 plait doctor --json
+stdout '"name":"ca","status":"fail","detail":"SSL_CERT_FILE [^"]+/ca.pem holds no PEM certificate","fix":"point network.ca_file'
+env SSL_CERT_FILE=
+exec plait doctor --json
+stdout '"name":".plait","status":"ok"'
+stdout '"name":".gitignore","status":"ok","detail":".plait/runs is ignored"'
+stdout '"name":"telemetry claude","status":"ok","detail":"off: DISABLE_TELEMETRY=1"'
+! stdout '"status":"fail"'
+
+-- bin/claude --
+#!/bin/sh
+echo '2.1.0 (Claude Code)'
+-- bin/qwen --
+#!/bin/sh
+echo 0.9.1
+-- empty/.keep --
+-- ca.pem --
+not a certificate

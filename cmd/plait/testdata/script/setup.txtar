@@ -33,8 +33,7 @@ stdout '"changed":false'
 # setup installs skills and deny rules for both agents
 exec plait setup --json
 stdout '"changed":true'
-# doctor checks join the answer after Task 6; until then the list is empty
-stdout '"checks":\[\]'
+stdout '"name":"skills claude","status":"ok"'
 exists home/.claude/skills/plait/SKILL.md
 exists home/.claude/skills/plait-review/SKILL.md
 exists home/.claude/skills/plait-mr/SKILL.md

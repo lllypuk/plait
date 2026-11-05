@@ -1,0 +1,9 @@
+ok    plait             v0.1.0
+ok    agent claude      2.1.0 (Claude Code) at /usr/bin/claude
+fail  skills claude     no plait skills in /home/dev/.claude/skills
+                        fix: run plait setup --agent claude
+warn  telemetry claude  telemetry is on
+                        fix: turn it off with one of: DISABLE_TELEMETRY=1 in the environment
+ok    ca                system certificate pool
+ok    empty
+4 ok, 1 warn, 1 fail

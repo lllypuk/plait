@@ -10,6 +10,7 @@ import (
 
 	"github.com/lllypuk/plait/internal/agent"
 	"github.com/lllypuk/plait/internal/config"
+	"github.com/lllypuk/plait/internal/doctor"
 	"github.com/lllypuk/plait/internal/install"
 	"github.com/lllypuk/plait/internal/output"
 )
@@ -28,8 +29,8 @@ type setupData struct {
 	Agents    []setupAgent  `json:"agents"`
 	Ops       []install.Op  `json:"ops"`
 	Changed   bool          `json:"changed"`
-	// Checks stays empty until doctor exists.
-	Checks []any `json:"checks"`
+	// Checks are the doctor checks of the installed agents; empty for a dry run and an uninstall.
+	Checks []doctor.Check `json:"checks"`
 }
 
 const columnGap = 2
@@ -53,6 +54,9 @@ func (a *app) newSetupCmd() *cobra.Command {
 				return err
 			}
 			text := opsText(data.Ops, data.DryRun, data.Changed, "done; restart the agent sessions to load the skills")
+			if len(data.Checks) > 0 {
+				text += "\n\n" + doctor.Text(data.Checks)
+			}
 			if conflicts := opsWith(data.Ops, install.ActionConflict); len(conflicts) > 0 {
 				e := conflictError(conflicts, "plait setup")
 				e.Data, e.Text = data, text
@@ -95,7 +99,13 @@ func (a *app) setup(cmd *cobra.Command, f setupFlags) (setupData, error) {
 	// Without HOME only user-scope paths fail, and Env.Path reports that with a fix.
 	home, _ := os.UserHomeDir()
 	env := install.Env{Home: home, Root: root}
-	data := setupData{Scope: scope, DryRun: f.dryRun, Uninstall: f.uninstall, Ops: []install.Op{}, Checks: []any{}}
+	data := setupData{
+		Scope:     scope,
+		DryRun:    f.dryRun,
+		Uninstall: f.uninstall,
+		Ops:       []install.Op{},
+		Checks:    []doctor.Check{},
+	}
 	for _, sa := range agents {
 		d, _ := reg.Get(sa.Name)
 		ops, planErr := install.Plan(d, scope, env, a.opts.Version, f.uninstall)
@@ -113,6 +123,16 @@ func (a *app) setup(cmd *cobra.Command, f setupFlags) (setupData, error) {
 	}
 	for _, op := range data.Ops {
 		data.Changed = data.Changed || op.Changes()
+	}
+	if f.uninstall {
+		return data, nil
+	}
+	names := make([]string, len(agents))
+	for i, sa := range agents {
+		names[i] = sa.Name
+	}
+	if data.Checks, err = a.doctor(cmd, names); err != nil {
+		return setupData{}, err
 	}
 	return data, nil
 }

@@ -114,6 +114,20 @@ func Plan(d agent.Descriptor, scope Scope, env Env, version string, uninstall bo
 	return append(ops, pops...), nil
 }
 
+// SkillPlan returns the skill operations Plan would make to install d in scope.
+func SkillPlan(d agent.Descriptor, scope Scope, env Env, version string) ([]Op, error) {
+	dir, err := env.Path(d.Name, scope, scopePath(d.SkillDirs, scope))
+	if err != nil {
+		return nil, err
+	}
+	return skillOps(d, dir, version, false)
+}
+
+// PermissionPlan returns the deny rule operations Plan would make to install d in scope.
+func PermissionPlan(d agent.Descriptor, scope Scope, env Env) ([]Op, error) {
+	return permissionOps(d, scope, env, false)
+}
+
 func scopePath(s agent.Scopes, scope Scope) string {
 	if scope == ScopeProject {
 		return s.Project

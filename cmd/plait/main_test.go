@@ -30,14 +30,24 @@ func TestScript(t *testing.T) {
 	})
 }
 
-// setup exports PLAITBIN, the directory of the plait command, so a script can narrow PATH to its own fake agents.
+// setup exports PLAITBIN, the directory of the plait command, and GITBIN, a directory with git alone,
+// so a script can narrow PATH to its own fake agents.
 func setup(env *testscript.Env) error {
 	p, err := exec.LookPath("plait")
 	if err != nil {
 		return err
 	}
 	env.Setenv("PLAITBIN", filepath.Dir(p))
-	return nil
+	git, err := exec.LookPath("git")
+	if err != nil {
+		return err
+	}
+	dir := filepath.Join(env.WorkDir, ".gitbin")
+	if err = os.Mkdir(dir, 0o700); err != nil {
+		return err
+	}
+	env.Setenv("GITBIN", dir)
+	return os.Symlink(git, filepath.Join(dir, "git"))
 }
 
 // exitCode runs `exitcode N cmd args...` and fails unless cmd exits with N; testscript's exec only tells zero from non-zero.
