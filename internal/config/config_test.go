@@ -220,7 +220,7 @@ func TestLoadNewKeyDefaults(t *testing.T) {
 	if len(cfg.Review.Checks) != 0 {
 		t.Errorf("review.checks = %q, want empty", cfg.Review.Checks)
 	}
-	if !slices.Contains(cfg.Audit.DenyGlobs, ".env") || !slices.Contains(cfg.Audit.DenyGlobs, "**/*.pem") {
+	if !slices.Contains(cfg.Audit.DenyGlobs, "**/.env") || !slices.Contains(cfg.Audit.DenyGlobs, "**/*.pem") {
 		t.Errorf("audit.deny_globs = %q", cfg.Audit.DenyGlobs)
 	}
 	if cfg.MR.Template != "" {

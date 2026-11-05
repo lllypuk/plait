@@ -7,7 +7,7 @@ review:
   # Expected check names, e.g. [test, lint].
   checks: []
 audit:
-  deny_globs: [".env", ".env.*", "**/*.pem", "**/*.key", "**/id_rsa*", "**/secrets/**", "**/*.p12", "**/*.keystore"]
+  deny_globs: ["**/.env", "**/.env.*", "**/*.pem", "**/*.key", "**/id_rsa*", "**/secrets/**", "**/*.p12", "**/*.keystore"]
 mr:
   # Repository path to a custom text/template; empty uses the built-in one.
   template: ""

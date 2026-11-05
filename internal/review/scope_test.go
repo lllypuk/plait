@@ -16,6 +16,9 @@ func TestMatchGlob(t *testing.T) {
 	}{
 		{envFile, envFile, true},
 		{envFile, "app/.env", false},
+		{"**/.env", envFile, true},
+		{"**/.env", "app/.env", true},
+		{"**/.env.*", "svc/api/.env.local", true},
 		{".env.*", ".env.local", true},
 		{".env.*", envFile, false},
 		{pemGlob, "server.pem", true},

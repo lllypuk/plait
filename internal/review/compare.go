@@ -1,7 +1,6 @@
 package review
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -137,13 +136,9 @@ func encodeTracked(st *run.State, snap run.Snapshot, tracked []Tracked) ([]byte,
 	return append(b, '\n'), nil
 }
 
-// writeTracked replaces path only when its content differs, so importing the same answer leaves the file alone.
+// writeTracked leaves an unchanged file alone, so importing the same answer does not touch it.
 func writeTracked(path string, b []byte) error {
-	old, err := os.ReadFile(filepath.Clean(path))
-	if err == nil && bytes.Equal(old, b) {
-		return nil
-	}
-	if err = run.WriteFile(path, b); err != nil {
+	if _, err := run.WriteIfChanged(path, b); err != nil {
 		return output.Internal(err)
 	}
 	return nil

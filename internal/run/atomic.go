@@ -1,6 +1,7 @@
 package run
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -66,4 +67,16 @@ func removeStale(dir, prefix string) error {
 		}
 	}
 	return nil
+}
+
+// WriteIfChanged replaces path via WriteFile only when its content differs and reports whether it wrote.
+func WriteIfChanged(path string, data []byte) (bool, error) {
+	old, err := os.ReadFile(filepath.Clean(path))
+	if err == nil && bytes.Equal(old, data) {
+		return false, nil
+	}
+	if err = WriteFile(path, data); err != nil {
+		return false, err
+	}
+	return true, nil
 }

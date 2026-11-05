@@ -140,6 +140,44 @@ func TestDescribe(t *testing.T) {
 	wantInvalid(t, err, "no_review")
 }
 
+func TestDescribeBrokenArtifacts(t *testing.T) {
+	for _, tc := range []struct {
+		name, code string
+		breakRun   func(t *testing.T, runDir string)
+	}{
+		{"findings of another snapshot", "findings_corrupt", func(t *testing.T, runDir string) {
+			p := filepath.Join(runDir, "findings-1.json")
+			write(t, runDir, "findings-1.json", strings.Replace(read(t, p), `"snapshot": "`, `"snapshot": "0`, 1))
+		}},
+		{"findings with a wrong schema", "findings_corrupt", func(t *testing.T, runDir string) {
+			write(t, runDir, "findings-1.json", `{"schema":"other/v1"}`)
+		}},
+		{"findings missing", "findings_missing", func(t *testing.T, runDir string) {
+			remove(t, filepath.Join(runDir, "findings-1.json"))
+		}},
+		{"task missing", "state_corrupt", func(t *testing.T, runDir string) {
+			remove(t, filepath.Join(runDir, task.FileName))
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, s, repo := setup(t)
+			exp, err := review.Export(t.Context(), s, repo, config.Config{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			ans := fmt.Appendf(nil, `{"snapshot":%q,"coverage":"criteria","findings":[]}`, exp.Commit)
+			if _, err = review.Import(t.Context(), s, repo, ans, "-"); err != nil {
+				t.Fatal(err)
+			}
+			tc.breakRun(t, s.RunDir(exp.Run))
+			_, err = mr.Describe(t.Context(), s, repo, config.Config{}, mr.Input{Version: version})
+			if e, ok := errors.AsType[*output.Error](err); !ok || e.Kind != output.KindNeedsHuman || e.Code != tc.code {
+				t.Fatalf("err = %#v, want NeedsHuman %q", err, tc.code)
+			}
+		})
+	}
+}
+
 func TestDescribeTemplate(t *testing.T) {
 	dir, s, repo := setup(t)
 	write(t, dir, "own.tmpl", `{{.Task}} [{{join .Labels ","}}]`+"\n")
@@ -213,6 +251,13 @@ func git(t *testing.T, dir string, args ...string) {
 func write(t *testing.T, dir, name, content string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func remove(t *testing.T, path string) {
+	t.Helper()
+	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
 }

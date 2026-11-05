@@ -123,7 +123,7 @@ flowchart LR
 
 Агент узнаёт стадию из `plait next` и сдаёт результат через `save`, а переход делает plait. Ревью плана и кода повторяются до вердикта approved, число итераций ограничено, а при повторе тех же замечаний решение передаётся человеку. L0–L3 — минимальный уровень автономии для стадии. Любую стадию можно запустить отдельно: например, только `review` для кода, написанного человеком.
 
-Артефакты run лежат в `.plait/runs/<run-id>/`: `task.md`, `analysis.md`, `plan.md`, `review-*.json`, `state.json`, `messages.jsonl`, `audit.jsonl`.
+Артефакты run лежат в `.plait/runs/<run-id>/`: `task.md`, `analysis.md`, `plan.md`, `review-*.json`, `findings-*.json`, `checks/*.json`, `mr.md`, `state.json`, `messages.jsonl`, `audit.jsonl`.
 
 ## Интерфейс CLI для агентов
 
@@ -149,7 +149,7 @@ flowchart LR
 | Установка | `setup`, `init`, `doctor`, `version` | человек |
 | Навигация | `next`, `guide <stage>`, `status`, `run new/resume/list` | агент |
 | Контекст задачи | `ctx <JIRA-KEY>`, `ctx save <JIRA-KEY>` | агент |
-| Артефакты | `analyze save`, `plan new/check/save`, `review collect/save`, `verify` | агент |
+| Артефакты | `analyze save`, `plan new/check/save`, `review collect/save`, `check save <name>`, `verify` | агент |
 | Другие агенты | `review --with <agent>`, `ask <role>`, `msg send/inbox`, `wait <job>` | агент |
 | Очередь | `worker` (выполняет задания из песочницы) | человек, вне песочницы |
 | Гейты | `approve`, `reject` | только человек (TTY) |
@@ -322,7 +322,9 @@ artifacts:
   dir: .plait/runs
   publish_plans_to: docs/plans   # планы попадают в MR
 comms: { transport: mcp, max_ask_depth: 1, max_messages_per_stage: 30 }
-audit: { redact: true, deny_globs: [".env*", "**/*.pem", "**/secrets/**"] }
+review: { base: "", rules: [AGENTS.md, CLAUDE.md, .plait/rules.md], max_diff_bytes: 524288, checks: [test, lint] }
+mr: { template: "" }   # свой text/template в репо
+audit: { redact: true, deny_globs: ["**/.env*", "**/*.pem", "**/secrets/**"] }
 ```
 
 Библиотеки: `spf13/cobra`, `go.yaml.in/yaml/v3` (слои конфига сливаются своим кодом, без koanf), `charmbracelet/huh` + `lipgloss`, `log/slog`, `gitlab.com/gitlab-org/api/client-go/v2`, `google/go-github`, `modelcontextprotocol/go-sdk`, `zalando/go-keyring`. Процессы агентов запускаются через `exec.CommandContext` в отдельной process group.

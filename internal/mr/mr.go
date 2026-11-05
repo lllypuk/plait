@@ -246,9 +246,9 @@ func Describe(ctx context.Context, s *run.Store, repo vcs.Repo, cfg config.Confi
 		return Result{}, err
 	}
 	path := filepath.Join(runDir, FileName)
-	changed, err := write(path, []byte("# "+d.Title+"\n\n"+body))
+	changed, err := run.WriteIfChanged(path, []byte("# "+d.Title+"\n\n"+body))
 	if err != nil {
-		return Result{}, err
+		return Result{}, output.Internal(err)
 	}
 	if st.Step != run.StepDescribed {
 		st.Step, changed = run.StepDescribed, true
@@ -284,16 +284,4 @@ func reviewed(st *run.State) (run.Snapshot, run.Review, error) {
 		return run.Snapshot{}, run.Review{}, run.BrokenState(st, "review "+strconv.Itoa(rev.N)+" without its snapshot")
 	}
 	return st.Snapshots[i], rev, nil
-}
-
-// write replaces path only when its content differs.
-func write(path string, b []byte) (bool, error) {
-	old, err := os.ReadFile(filepath.Clean(path))
-	if err == nil && bytes.Equal(old, b) {
-		return false, nil
-	}
-	if err = run.WriteFile(path, b); err != nil {
-		return false, output.Internal(err)
-	}
-	return true, nil
 }
