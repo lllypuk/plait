@@ -12,7 +12,9 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"github.com/lllypuk/plait/internal/audit"
 	"github.com/lllypuk/plait/internal/output"
+	"github.com/lllypuk/plait/internal/run"
 	"github.com/lllypuk/plait/internal/task"
 )
 
@@ -34,27 +36,30 @@ func (a *app) newCtxSaveCmd() *cobra.Command {
 		Use:   "save [KEY]",
 		Short: "Normalize the task Markdown from stdin or --file into task.md of the current run",
 		Args:  cobra.MaximumNArgs(1),
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			in := task.Input{Source: source}
 			if len(args) == 1 {
 				in.Key = args[0]
 			}
-			text, err := a.readTask(file)
+			root, err := a.repoRoot()
 			if err != nil {
 				return err
 			}
-			in.Text = text
-			s, err := a.store()
+			text, inErr := a.readTask(file)
+			var res task.Result
+			err = a.audited(cmd, root, func(s *run.Store, _ *audit.Entry) error {
+				if inErr != nil {
+					return inErr
+				}
+				in.Text = text
+				var saveErr error
+				res, saveErr = task.Save(s, in)
+				return saveErr
+			})
 			if err != nil {
 				return err
 			}
-			res, err := task.Save(s, in)
-			if err != nil {
-				return err
-			}
-			if root, rootErr := a.repoRoot(); rootErr == nil {
-				res.Path = relTo(root, res.Path)
-			}
+			res.Path = relTo(root, res.Path)
 			return a.printer().Success(res, ctxSaveText(res))
 		},
 	}

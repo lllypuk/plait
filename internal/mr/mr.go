@@ -44,14 +44,15 @@ type Input struct {
 
 // Result describes what mr describe did.
 type Result struct {
-	Run     string   `json:"run"`
-	Title   string   `json:"title"`
-	Body    string   `json:"body"`
-	Labels  []string `json:"labels"`
-	Path    string   `json:"path"`
-	Stale   bool     `json:"stale"`
-	Changed bool     `json:"changed"`
-	Step    run.Step `json:"step"`
+	Run      string   `json:"run"`
+	Snapshot int      `json:"snapshot"`
+	Title    string   `json:"title"`
+	Body     string   `json:"body"`
+	Labels   []string `json:"labels"`
+	Path     string   `json:"path"`
+	Stale    bool     `json:"stale"`
+	Changed  bool     `json:"changed"`
+	Step     run.Step `json:"step"`
 }
 
 // Data is what the built-in template and mr.template render.
@@ -259,8 +260,8 @@ func Describe(ctx context.Context, s *run.Store, repo vcs.Repo, cfg config.Confi
 		path = rel
 	}
 	return Result{
-		Run: st.ID, Title: d.Title, Body: body, Labels: d.Labels, Path: filepath.ToSlash(path), Stale: stale,
-		Changed: changed, Step: st.Step,
+		Run: st.ID, Snapshot: snap.N, Title: d.Title, Body: body, Labels: d.Labels, Path: filepath.ToSlash(path),
+		Stale: stale, Changed: changed, Step: st.Step,
 	}, nil
 }
 

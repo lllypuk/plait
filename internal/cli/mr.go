@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/lllypuk/plait/internal/audit"
 	"github.com/lllypuk/plait/internal/config"
 	"github.com/lllypuk/plait/internal/mr"
 	"github.com/lllypuk/plait/internal/output"
@@ -43,20 +44,26 @@ func (a *app) newMRDescribeCmd() *cobra.Command {
 		Short: "Write mr.md with the title and body of the merge request; it creates nothing",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			summary, err := a.readSummary(summaryFile)
-			if err != nil {
-				return err
-			}
 			root, err := a.repoRoot()
 			if err != nil {
 				return err
 			}
-			cfg, err := config.Load(config.DefaultSources(root))
-			if err != nil {
-				return err
-			}
-			res, err := mr.Describe(cmd.Context(), run.Open(root), vcs.Repo{Root: root}, cfg,
-				mr.Input{Summary: summary, AllowStale: allowStale, Version: a.opts.Version})
+			summary, inErr := a.readSummary(summaryFile)
+			var res mr.Result
+			err = a.audited(cmd, root, func(s *run.Store, e *audit.Entry) error {
+				if inErr != nil {
+					return inErr
+				}
+				cfg, cfgErr := config.Load(config.DefaultSources(root))
+				if cfgErr != nil {
+					return cfgErr
+				}
+				var descErr error
+				res, descErr = mr.Describe(cmd.Context(), s, vcs.Repo{Root: root}, cfg,
+					mr.Input{Summary: summary, AllowStale: allowStale, Version: a.opts.Version})
+				e.Snapshot = res.Snapshot
+				return descErr
+			})
 			if err != nil {
 				return err
 			}

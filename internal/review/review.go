@@ -17,6 +17,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/lllypuk/plait/internal/audit"
 	"github.com/lllypuk/plait/internal/check"
 	"github.com/lllypuk/plait/internal/config"
 	"github.com/lllypuk/plait/internal/output"
@@ -69,6 +70,7 @@ type Package struct {
 	Checks       []Check
 	Gaps         []run.Gap
 	Previous     []Previous
+	files        []vcs.FileDiff
 }
 
 // ExportResult describes what review export did.
@@ -82,6 +84,10 @@ type ExportResult struct {
 	Changed  bool      `json:"changed"`
 	Step     run.Step  `json:"step"`
 	Gaps     []run.Gap `json:"coverage_gaps"`
+	// PackageSHA256, Context and Excluded go to the audit log, not to the agent.
+	PackageSHA256 string           `json:"-"`
+	Context       []audit.File     `json:"-"`
+	Excluded      []audit.Excluded `json:"-"`
 }
 
 // Render fills package.md; it depends only on p, so the same input gives the same bytes.
@@ -203,10 +209,36 @@ func Export(ctx context.Context, s *run.Store, repo vcs.Repo, cfg config.Config)
 	if rel, relErr := filepath.Rel(repo.Root, path); relErr == nil {
 		path = rel
 	}
-	return ExportResult{
+	res := ExportResult{
 		Run: st.ID, Snapshot: n, Commit: snap.Commit, Base: snap.Base, Coverage: p.Coverage, Gaps: p.Gaps,
-		Package: filepath.ToSlash(path), Changed: !reused, Step: st.Step,
-	}, nil
+		Package: filepath.ToSlash(path), Changed: !reused, Step: st.Step, PackageSHA256: audit.SHA256(md),
+	}
+	taskPath := filepath.ToSlash(filepath.Join(".plait", "runs", st.ID, task.FileName))
+	res.Context, res.Excluded = auditLists(taskPath, taskMD, p)
+	return res, nil
+}
+
+// auditLists names what the package quoted, by hash, and what it left out.
+func auditLists(taskPath string, taskMD []byte, p Package) ([]audit.File, []audit.Excluded) {
+	read := []audit.File{{Path: taskPath, SHA256: audit.SHA256(taskMD)}}
+	left := []audit.Excluded{}
+	for _, r := range p.Rules {
+		if r.Excluded {
+			left = append(left, audit.Excluded{Path: r.Path, Reason: audit.ReasonDenyGlob})
+			continue
+		}
+		read = append(read, audit.File{Path: r.Path, SHA256: audit.SHA256([]byte(r.Content))})
+	}
+	for _, f := range p.files {
+		read = append(read, audit.File{Path: f.Path, SHA256: audit.SHA256([]byte(f.Diff))})
+	}
+	for _, path := range p.Excluded {
+		left = append(left, audit.Excluded{Path: path, Reason: audit.ReasonDenyGlob})
+	}
+	for _, path := range p.Dropped {
+		left = append(left, audit.Excluded{Path: path, Reason: audit.ReasonDiffLimit})
+	}
+	return read, left
 }
 
 // buildPackage snapshots the working copy and collects the rules, diff and checks of the package.
@@ -232,6 +264,7 @@ func buildPackage(ctx context.Context, repo vcs.Repo, cfg config.Config, runDir 
 	return Package{
 		Base: snap.Base, Rules: rules, Diff: sc.Diff, Excluded: sc.Excluded, Dropped: sc.Dropped,
 		MaxDiffBytes: cfg.Review.MaxDiffBytes, Checks: checks, Gaps: append(gaps(sc, rules), checkGaps(checks)...),
+		files: sc.Files,
 	}, snap, nil
 }
 

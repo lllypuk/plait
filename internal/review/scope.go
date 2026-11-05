@@ -67,6 +67,7 @@ func CheckGlobs(globs []string) error {
 // Scope is the part of the snapshot diff that goes into the package.
 type Scope struct {
 	Diff     string
+	Files    []vcs.FileDiff
 	Excluded []string
 	Dropped  []string
 }
@@ -105,6 +106,7 @@ func ScopeDiff(files []vcs.FileDiff, deny []string, maxBytes int) Scope {
 			sc.Dropped = append(sc.Dropped, f.Path)
 			continue
 		}
+		sc.Files = append(sc.Files, f)
 		b.WriteString(f.Diff)
 	}
 	sc.Diff = b.String()

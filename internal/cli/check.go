@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/lllypuk/plait/internal/audit"
 	"github.com/lllypuk/plait/internal/check"
 	"github.com/lllypuk/plait/internal/output"
 	"github.com/lllypuk/plait/internal/run"
@@ -44,20 +45,26 @@ func (a *app) newCheckSaveCmd() *cobra.Command {
 		Short: "Save a check's exit code and output from stdin or --file, bound to the current working tree",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if !cmd.Flags().Changed("exit-code") {
-				return output.Invalid("no_exit_code", "the exit code of the check is not given",
-					"pass it right after running the check: "+checkSaveFix)
-			}
-			out, err := a.readCheckOutput(file)
-			if err != nil {
-				return err
-			}
 			root, err := a.repoRoot()
 			if err != nil {
 				return err
 			}
-			res, err := check.Save(cmd.Context(), run.Open(root), vcs.Repo{Root: root},
-				check.Input{Name: args[0], ExitCode: exitCode, Output: out})
+			var out []byte
+			var inErr error = output.Invalid("no_exit_code", "the exit code of the check is not given",
+				"pass it right after running the check: "+checkSaveFix)
+			if cmd.Flags().Changed("exit-code") {
+				out, inErr = a.readCheckOutput(file)
+			}
+			var res check.Result
+			err = a.audited(cmd, root, func(s *run.Store, _ *audit.Entry) error {
+				if inErr != nil {
+					return inErr
+				}
+				var saveErr error
+				res, saveErr = check.Save(cmd.Context(), s, vcs.Repo{Root: root},
+					check.Input{Name: args[0], ExitCode: exitCode, Output: out})
+				return saveErr
+			})
 			if err != nil {
 				return err
 			}

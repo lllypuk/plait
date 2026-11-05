@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/lllypuk/plait/internal/audit"
 	"github.com/lllypuk/plait/internal/config"
 	"github.com/lllypuk/plait/internal/output"
 	"github.com/lllypuk/plait/internal/review"
@@ -43,13 +44,19 @@ func (a *app) newReviewExportCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			src := config.DefaultSources(root)
-			src.Flags = flags
-			cfg, err := config.Load(src)
-			if err != nil {
-				return err
-			}
-			res, err := review.Export(cmd.Context(), run.Open(root), vcs.Repo{Root: root}, cfg)
+			var res review.ExportResult
+			err = a.audited(cmd, root, func(s *run.Store, e *audit.Entry) error {
+				src := config.DefaultSources(root)
+				src.Flags = flags
+				cfg, cfgErr := config.Load(src)
+				if cfgErr != nil {
+					return cfgErr
+				}
+				var expErr error
+				res, expErr = review.Export(cmd.Context(), s, vcs.Repo{Root: root}, cfg)
+				e.Snapshot, e.PackageSHA256, e.Context, e.Excluded = res.Snapshot, res.PackageSHA256, res.Context, res.Excluded
+				return expErr
+			})
 			if err != nil {
 				return err
 			}
@@ -90,11 +97,18 @@ func (a *app) newReviewImportCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			data, err := a.readAnswer(args[0])
-			if err != nil {
-				return err
-			}
-			res, err := review.Import(cmd.Context(), run.Open(root), vcs.Repo{Root: root}, data, args[0])
+			data, inErr := a.readAnswer(args[0])
+			var res review.ImportResult
+			err = a.audited(cmd, root, func(s *run.Store, e *audit.Entry) error {
+				if inErr != nil {
+					return inErr
+				}
+				e.AnswerSHA256 = audit.SHA256(data)
+				var impErr error
+				res, impErr = review.Import(cmd.Context(), s, vcs.Repo{Root: root}, data, args[0])
+				e.Snapshot = res.Snapshot
+				return impErr
+			})
 			if err != nil {
 				return err
 			}
@@ -154,7 +168,13 @@ func (a *app) newReviewReportCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			res, err := review.BuildReport(cmd.Context(), run.Open(root), vcs.Repo{Root: root})
+			var res review.Report
+			err = a.audited(cmd, root, func(s *run.Store, e *audit.Entry) error {
+				var repErr error
+				res, repErr = review.BuildReport(cmd.Context(), s, vcs.Repo{Root: root})
+				e.Snapshot = res.Snapshot
+				return repErr
+			})
 			if err != nil {
 				return err
 			}

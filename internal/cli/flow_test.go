@@ -20,6 +20,9 @@ const (
 	nextCmd        = "next"
 	ctxSaveCmd     = "ctx save"
 	importStdinCmd = "review import -"
+	runNewCmd      = "run new retry --key PROJ-1"
+	exportCmd      = "review export"
+	reportCmd      = "review report"
 )
 
 type flowCase struct {
@@ -112,9 +115,9 @@ func TestFlow(t *testing.T) {
 			for _, c := range []flowCase{
 				{cmd: "run list", want: "no runs", asJSON: `"runs":[]`},
 				{cmd: nextCmd, code: 2, want: "fix: start one with plait run new", asJSON: `"code":"no_current_run"`},
-				{cmd: "run new retry --key PROJ-1", want: "created run " + runID,
+				{cmd: runNewCmd, want: "created run " + runID,
 					asJSON: `"run":"` + runID + `","step":"new","dir":".plait/runs/` + runID + `","created":true`},
-				{cmd: "run new retry --key PROJ-1", want: "resumed existing", asJSON: `"created":false`},
+				{cmd: runNewCmd, want: "resumed existing", asJSON: `"created":false`},
 				{cmd: "run resume " + runID, want: "current run: " + runID, asJSON: `"run":"` + runID},
 				{cmd: "run resume nope", code: 2, want: "fix: see existing runs", asJSON: `"code":"run_not_found"`},
 				{cmd: "run list", want: "* " + runID + "  new", asJSON: `"current":true`},
@@ -131,10 +134,10 @@ func TestFlow(t *testing.T) {
 				{cmd: nextCmd, want: "input: .plait/runs/" + runID + "/task.md", asJSON: `"step":"task_saved"`},
 
 				{cmd: "review export --base nope", code: 2, want: "fix: pass --base", asJSON: `"code":"base_not_found"`},
-				{cmd: "review export", want: "exported snapshot 1", asJSON: `"snapshot":1`},
+				{cmd: exportCmd, want: "exported snapshot 1", asJSON: `"snapshot":1`},
 				{cmd: "review export --base main", want: "unchanged snapshot 1", asJSON: unchangedJSON},
 				{cmd: nextCmd, want: "(schema review-findings/v1)", asJSON: `"step":"exported"`},
-				{cmd: "review report", code: 2, want: "fix: review the exported package.md", asJSON: `"code":"no_review"`},
+				{cmd: reportCmd, code: 2, want: "fix: review the exported package.md", asJSON: `"code":"no_review"`},
 			} {
 				runFlow(t, dir, tty, c)
 			}
@@ -152,7 +155,7 @@ func TestFlow(t *testing.T) {
 				{cmd: "review import answer.json", want: "imported .plait/runs/" + runID, asJSON: `"findings":1,`},
 				{cmd: importStdinCmd, stdin: answer, want: "unchanged", asJSON: unchangedJSON},
 				{cmd: nextCmd, want: "then: plait review report", asJSON: `"step":"imported"`},
-				{cmd: "review report", want: "no retry", asJSON: `"step":"reported"`},
+				{cmd: reportCmd, want: "no retry", asJSON: `"step":"reported"`},
 			} {
 				runFlow(t, dir, tty, c)
 			}

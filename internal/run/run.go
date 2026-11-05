@@ -105,8 +105,9 @@ type Summary struct {
 
 // Store is the .plait directory of one repository.
 type Store struct {
-	Dir string
-	Now func() time.Time
+	Dir  string
+	Now  func() time.Time
+	held bool
 }
 
 // Open returns the store of the repository at root.
