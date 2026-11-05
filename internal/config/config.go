@@ -56,6 +56,8 @@ type MR struct {
 type Network struct {
 	// CAFile is a PEM bundle added to the system pool; a relative path starts at the repository root.
 	CAFile string `yaml:"ca_file"`
+	// Endpoints are the URLs plait doctor --net reaches besides the model endpoints of the agents.
+	Endpoints []string `yaml:"endpoints"`
 }
 
 // Sources lists the layers in ascending priority; a missing or empty file path is skipped.

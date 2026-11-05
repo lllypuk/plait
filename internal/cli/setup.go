@@ -131,7 +131,7 @@ func (a *app) setup(cmd *cobra.Command, f setupFlags) (setupData, error) {
 	for i, sa := range agents {
 		names[i] = sa.Name
 	}
-	if data.Checks, err = a.doctor(cmd, names); err != nil {
+	if data.Checks, err = a.doctor(cmd, names, false); err != nil {
 		return setupData{}, err
 	}
 	return data, nil

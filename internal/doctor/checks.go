@@ -16,6 +16,7 @@ import (
 
 	"github.com/lllypuk/plait/internal/agent"
 	"github.com/lllypuk/plait/internal/install"
+	"github.com/lllypuk/plait/internal/netx"
 	"github.com/lllypuk/plait/internal/vcs"
 )
 
@@ -341,12 +342,7 @@ func proxyCheck(env Env) Check {
 // caCheck needs at least one parsable certificate in network.ca_file, else in SSL_CERT_FILE.
 func caCheck(env Env, configured string) Check {
 	name := "ca"
-	file, from := configured, "network.ca_file"
-	if file == "" {
-		file, from = lookup(env.Sources.Environ, "SSL_CERT_FILE"), "SSL_CERT_FILE"
-	} else if !filepath.IsAbs(file) && env.Root != "" {
-		file = filepath.Join(env.Root, file)
-	}
+	file, from := netx.CAFile(configured, env.Root, env.Sources.Environ)
 	if file == "" {
 		return Check{Name: name, Status: StatusOK, Detail: "system certificate pool"}
 	}

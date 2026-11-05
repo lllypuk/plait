@@ -14,6 +14,8 @@ mr:
 network:
   # PEM file with the corporate CA, added to the system pool; relative to the repository root. Empty: SSL_CERT_FILE.
   ca_file: ""
+  # URLs plait doctor --net reaches besides the model endpoints, e.g. [https://gitlab.example.internal].
+  endpoints: []
 # Agents in plait-agent/v1 by name: override a built-in one (claude, qwen) field by field,
 # or describe a new one; base: <agent> takes another agent's fields first.
 agents: {}

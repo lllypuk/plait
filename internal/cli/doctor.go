@@ -17,12 +17,13 @@ type doctorData struct {
 }
 
 func (a *app) newDoctorCmd() *cobra.Command {
-	return &cobra.Command{
+	var net bool
+	cmd := &cobra.Command{
 		Use:   "doctor",
-		Short: "Check the agents, the repository, the proxy and the CA without network access",
+		Short: "Check the agents, the repository, the proxy and the CA; only --net reaches the endpoints",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			checks, err := a.doctor(cmd, nil)
+			checks, err := a.doctor(cmd, nil, net)
 			if err != nil {
 				return err
 			}
@@ -42,15 +43,17 @@ func (a *app) newDoctorCmd() *cobra.Command {
 			return a.printer().Success(data, text)
 		},
 	}
+	cmd.Flags().BoolVar(&net, "net", false, "also reach the model endpoints and network.endpoints over HTTPS")
+	return cmd
 }
 
 // doctor runs the checks for the named agents, every agent when names is empty.
-func (a *app) doctor(cmd *cobra.Command, names []string) ([]doctor.Check, error) {
+func (a *app) doctor(cmd *cobra.Command, names []string, net bool) ([]doctor.Check, error) {
 	root, inRepo, err := a.gitRoot()
 	if err != nil {
 		return nil, err
 	}
-	env := doctor.Env{Version: a.opts.Version, Sources: config.DefaultSources(root), Agents: names}
+	env := doctor.Env{Version: a.opts.Version, Sources: config.DefaultSources(root), Agents: names, Net: net}
 	if inRepo {
 		env.Root = root
 	}

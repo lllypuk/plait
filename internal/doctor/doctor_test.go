@@ -46,6 +46,7 @@ type fixture struct {
 	bin     string
 	environ []string
 	agents  []string
+	net     bool
 }
 
 // newFixture isolates PATH to fake agents and git, so the agents of the developer are never found.
@@ -120,6 +121,7 @@ func (f *fixture) run() []doctor.Check {
 		Root:    f.root,
 		Sources: config.Sources{Repo: filepath.Join(f.plaitDir(), "config.yaml"), Environ: f.environ},
 		Agents:  f.agents,
+		Net:     f.net,
 	})
 }
 

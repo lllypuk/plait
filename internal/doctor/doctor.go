@@ -1,4 +1,4 @@
-// Package doctor checks the agents, the repository and the closed network plait works in, without network access.
+// Package doctor checks the agents, the repository and the closed network plait works in; only Env.Net reaches the network.
 package doctor
 
 import (
@@ -40,6 +40,8 @@ type Env struct {
 	Sources config.Sources
 	// Agents limits the agent checks to these names; empty means every known agent.
 	Agents []string
+	// Net also reaches the model endpoints and network.endpoints.
+	Net bool
 }
 
 // Run performs every check in a stable order.
@@ -58,13 +60,24 @@ func Run(ctx context.Context, env Env) []Check {
 			return append(checks, errCheck("agents", err))
 		}
 	}
+	var targets []target
 	for _, d := range reg.All() {
 		if len(env.Agents) == 0 || slices.Contains(env.Agents, d.Name) {
 			checks = append(checks, agentChecks(ctx, env, d)...)
+			if u := lookup(env.Sources.Environ, d.ModelEndpointEnv); d.ModelEndpointEnv != "" && u != "" {
+				targets = append(targets, target{url: u, from: d.ModelEndpointEnv})
+			}
 		}
 	}
 	checks = append(checks, repoChecks(ctx, env)...)
-	return append(checks, proxyCheck(env), caCheck(env, cfg.Network.CAFile))
+	checks = append(checks, proxyCheck(env), caCheck(env, cfg.Network.CAFile))
+	if env.Net {
+		for _, u := range cfg.Network.Endpoints {
+			targets = append(targets, target{url: u, from: "network.endpoints"})
+		}
+		checks = append(checks, netChecks(ctx, env, cfg.Network.CAFile, targets)...)
+	}
+	return checks
 }
 
 // Failed returns the checks with status fail.
