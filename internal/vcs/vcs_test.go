@@ -195,6 +195,63 @@ func TestDiffFiles(t *testing.T) {
 	}
 }
 
+func TestDiffFilesFileReplacedByDirectory(t *testing.T) {
+	dir := newRepo(t, "main")
+	write(t, dir, "config", "v\n")
+	base := commit(t, dir, "file")
+	if err := os.Remove(filepath.Join(dir, "config")); err != nil {
+		t.Fatal(err)
+	}
+	write(t, dir, "config/.env", "SECRET=1\n")
+	head := commit(t, dir, "directory")
+
+	files, err := vcs.Repo{Root: dir}.DiffFiles(t.Context(), base, head)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range files {
+		if f.Path == "config" && strings.Contains(f.Diff, "SECRET") {
+			t.Errorf("diff of config holds config/.env:\n%s", f.Diff)
+		}
+	}
+}
+
+func TestDiffFilesRenameIntoSameNamedDirectory(t *testing.T) {
+	dir := newRepo(t, "main")
+	write(t, dir, "config", "a\nb\nc\nd\n")
+	base := commit(t, dir, "file")
+	if err := os.Remove(filepath.Join(dir, "config")); err != nil {
+		t.Fatal(err)
+	}
+	write(t, dir, "config/settings", "a\nb\nc\nd\ne\n")
+	write(t, dir, "config/.env", "SECRET=1\n")
+	head := commit(t, dir, "directory")
+	repo := vcs.Repo{Root: dir}
+
+	files, err := repo.DiffFiles(t.Context(), base, head)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var renamed *vcs.FileDiff
+	for i := range files {
+		if files[i].OldPath == "config" {
+			renamed = &files[i]
+		}
+	}
+	if renamed == nil || renamed.Path != "config/settings" {
+		t.Fatalf("rename config -> config/settings not detected: %+v", files)
+	}
+	if !strings.Contains(renamed.Diff, "rename to config/settings") || !strings.Contains(renamed.Diff, "+e") ||
+		strings.Contains(renamed.Diff, "SECRET") {
+		t.Errorf("rename diff:\n%s", renamed.Diff)
+	}
+
+	loc, err := repo.MapLine(t.Context(), base, head, "config", 2)
+	if err != nil || loc != (vcs.Location{File: "config/settings", Line: 2, State: vcs.LineUnchanged}) {
+		t.Errorf("MapLine = %+v, %v", loc, err)
+	}
+}
+
 func TestSnapshotRepeatAndChangedAfter(t *testing.T) {
 	dir := newRepo(t, "main")
 	git(t, dir, "checkout", "-q", "-b", "feature")

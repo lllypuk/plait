@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -228,6 +229,33 @@ func TestLoadRules(t *testing.T) {
 	if len(rules) != 2 || rules[0] != (review.Rule{Path: docsDir, Excluded: true}) || rules[1].Path != agentsMD {
 		t.Errorf("rules with deny globs = %+v", rules)
 	}
+}
+
+func TestLoadRulesSymlinks(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	write(t, root, agentsMD, "agents\n")
+	const leak = "leak.md"
+	write(t, root, envFile, "SECRET=1\n")
+	write(t, outside, "rules.md", "outside\n")
+	for link, target := range map[string]string{
+		claudeMD: agentsMD, leak: envFile, "out.md": filepath.Join(outside, "rules.md"),
+	} {
+		if err := os.Symlink(target, filepath.Join(root, link)); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	rules, err := review.LoadRules(root, []string{claudeMD, leak}, []string{envFile})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []review.Rule{{Path: claudeMD, Content: "agents\n"}, {Path: leak, Excluded: true}}
+	if !slices.Equal(rules, want) {
+		t.Errorf("rules = %+v, want %+v", rules, want)
+	}
+	_, err = review.LoadRules(root, []string{"out.md"}, nil)
+	wantInvalid(t, err, "rule_outside_repo")
 }
 
 func TestExport(t *testing.T) {

@@ -110,13 +110,17 @@ func Render(p Package) ([]byte, error) {
 }
 
 // LoadRules reads the rule files that exist, in the configured order; a path must stay inside root.
-// A file under deny globs is listed as excluded and never read.
+// A file under deny globs, by its own path or the one its symlinks resolve to, is listed as excluded and never read.
 func LoadRules(root string, paths, deny []string) ([]Rule, error) {
 	r, err := os.OpenRoot(root)
 	if err != nil {
 		return nil, output.Internal(fmt.Errorf("open repository root: %w", err))
 	}
 	defer func() { _ = r.Close() }()
+	realRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return nil, output.Internal(fmt.Errorf("resolve repository root: %w", err))
+	}
 	rules := []Rule{}
 	seen := map[string]bool{}
 	for _, p := range paths {
@@ -135,16 +139,41 @@ func LoadRules(root string, paths, deny []string) ([]Rule, error) {
 			}
 			continue
 		}
-		b, readErr := r.ReadFile(p)
-		if errors.Is(readErr, fs.ErrNotExist) {
+		target, resolveErr := resolveRule(realRoot, p)
+		if errors.Is(resolveErr, fs.ErrNotExist) {
 			continue
 		}
+		if resolveErr != nil {
+			return nil, resolveErr
+		}
+		if Denied(deny, target) {
+			rules = append(rules, Rule{Path: p, Excluded: true})
+			continue
+		}
+		b, readErr := r.ReadFile(target)
 		if readErr != nil {
 			return nil, output.Invalid("rule_unreadable", fmt.Sprintf("review rule %s: %v", p, readErr), rulesFix)
 		}
 		rules = append(rules, Rule{Path: p, Content: string(b)})
 	}
 	return rules, nil
+}
+
+// resolveRule follows the symlinks of rule p and returns the slash path it points to inside realRoot.
+func resolveRule(realRoot, p string) (string, error) {
+	resolved, err := filepath.EvalSymlinks(filepath.Join(realRoot, p))
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", err
+	}
+	if err != nil {
+		return "", output.Invalid("rule_unreadable", fmt.Sprintf("review rule %s: %v", p, err), rulesFix)
+	}
+	rel, err := filepath.Rel(realRoot, resolved)
+	if err != nil || !filepath.IsLocal(rel) {
+		return "", output.Invalid("rule_outside_repo",
+			fmt.Sprintf("review rule %q resolves to a path outside the repository", p), rulesFix)
+	}
+	return filepath.ToSlash(rel), nil
 }
 
 // Export snapshots the working copy and writes the package; an unchanged working copy, task and rules keep the last snapshot.

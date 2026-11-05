@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -29,8 +30,26 @@ const (
 // hunkHeader matches "@@ -a[,b] +c[,d] @@"; an omitted count is 1.
 var hunkHeader = regexp.MustCompile(`^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@`)
 
-// literalPathspecs keeps file names with glob characters from matching other files.
-var literalPathspecs = []string{"GIT_LITERAL_PATHSPECS=1"} //nolint:gochecknoglobals // constant env slice
+// exactPathspecs match only the selected files: a bare pathspec also matches a same-named directory on the other
+// side of the diff, so the other changed files under a selected path are excluded one by one.
+func exactPathspecs(selected, changed []string) []string {
+	var specs []string
+	for _, p := range selected {
+		specs = append(specs, ":(literal)"+p)
+	}
+	for _, c := range changed {
+		if slices.Contains(selected, c) {
+			continue
+		}
+		for _, p := range selected {
+			if strings.HasPrefix(c, p+"/") {
+				specs = append(specs, ":(exclude,literal)"+c)
+				break
+			}
+		}
+	}
+	return specs
+}
 
 // Repo is a git repository rooted at Root.
 type Repo struct {
@@ -157,7 +176,7 @@ type FileDiff struct {
 
 // DiffFiles returns the diff from base to a commit or tree file by file, in git's order, with renames detected.
 func (r Repo) DiffFiles(ctx context.Context, base, to string) ([]FileDiff, error) {
-	out, err := r.git(ctx, literalPathspecs, "diff", "-M", "--numstat", "-z", base, to, "--")
+	out, err := r.git(ctx, nil, "diff", "-M", "--numstat", "-z", base, to, "--")
 	if err != nil {
 		return nil, err
 	}
@@ -165,12 +184,21 @@ func (r Repo) DiffFiles(ctx context.Context, base, to string) ([]FileDiff, error
 	if err != nil {
 		return nil, err
 	}
-	for i, f := range files {
-		args := []string{"diff", "--no-color", "--no-ext-diff", "-M", base, to, "--", f.Path}
+	var changed []string
+	for _, f := range files {
+		changed = append(changed, f.Path)
 		if f.OldPath != "" {
-			args = append(args, f.OldPath)
+			changed = append(changed, f.OldPath)
 		}
-		if files[i].Diff, err = r.git(ctx, literalPathspecs, args...); err != nil {
+	}
+	for i, f := range files {
+		paths := []string{f.Path}
+		if f.OldPath != "" {
+			paths = append(paths, f.OldPath)
+		}
+		args := append([]string{"diff", "--no-color", "--no-ext-diff", "-M", base, to, "--"},
+			exactPathspecs(paths, changed)...)
+		if files[i].Diff, err = r.git(ctx, nil, args...); err != nil {
 			return nil, err
 		}
 	}
@@ -219,11 +247,12 @@ type Location struct {
 
 // MapLine follows file:line from commit from to commit to, renames included.
 func (r Repo) MapLine(ctx context.Context, from, to, file string, line int) (Location, error) {
-	out, err := r.git(ctx, literalPathspecs, "diff", "-M", "--name-status", "-z", from, to, "--")
+	out, err := r.git(ctx, nil, "diff", "-M", "--name-status", "-z", from, to, "--")
 	if err != nil {
 		return Location{}, err
 	}
-	c := findChange(out, file)
+	changes := parseNameStatus(out)
+	c := findChange(changes, file)
 	switch c.status {
 	case "":
 		return Location{File: file, Line: line, State: LineUnchanged}, nil
@@ -232,13 +261,14 @@ func (r Repo) MapLine(ctx context.Context, from, to, file string, line int) (Loc
 	case "R100":
 		return Location{File: c.newPath, Line: line, State: LineUnchanged}, nil
 	}
-	args := []string{
-		"diff", "-U0", "-M", "--text", "--no-color", "--no-ext-diff", "--no-textconv", from, to, "--", c.newPath,
-	}
+	paths := []string{c.newPath}
 	if c.oldPath != c.newPath {
-		args = append(args, c.oldPath)
+		paths = append(paths, c.oldPath)
 	}
-	diff, err := r.git(ctx, literalPathspecs, args...)
+	args := append([]string{
+		"diff", "-U0", "-M", "--text", "--no-color", "--no-ext-diff", "--no-textconv", from, to, "--",
+	}, exactPathspecs(paths, changedPaths(changes))...)
+	diff, err := r.git(ctx, nil, args...)
 	if err != nil {
 		return Location{}, err
 	}
@@ -252,26 +282,44 @@ type change struct {
 	status, oldPath, newPath string
 }
 
-// findChange returns the --name-status -z record whose old path is file.
-func findChange(out, file string) change {
+// parseNameStatus reads --name-status -z records; a rename or copy carries "old\0new\0".
+func parseNameStatus(out string) []change {
 	tokens := strings.Split(strings.TrimSuffix(out, "\x00"), "\x00")
+	var changes []change
 	for i := 0; i+1 < len(tokens); i += 2 {
 		st, path := tokens[i], tokens[i+1]
 		if st != "" && (st[0] == 'R' || st[0] == 'C') {
 			if i+2 >= len(tokens) {
 				break
 			}
-			if path == file && st[0] == 'R' {
-				return change{st, path, tokens[i+2]}
-			}
+			changes = append(changes, change{st, path, tokens[i+2]})
 			i++
 			continue
 		}
-		if path == file {
-			return change{st, path, path}
+		changes = append(changes, change{st, path, path})
+	}
+	return changes
+}
+
+// findChange returns the change whose old path is file; a copy leaves its source unchanged.
+func findChange(changes []change, file string) change {
+	for _, c := range changes {
+		if c.oldPath == file && c.status != "" && c.status[0] != 'C' {
+			return c
 		}
 	}
 	return change{"", file, file}
+}
+
+func changedPaths(changes []change) []string {
+	var paths []string
+	for _, c := range changes {
+		paths = append(paths, c.oldPath)
+		if c.newPath != c.oldPath {
+			paths = append(paths, c.newPath)
+		}
+	}
+	return paths
 }
 
 // mapHunks shifts line by the -U0 hunks before it, or reports the hunk that covers it.
