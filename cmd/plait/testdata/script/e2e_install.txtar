@@ -1,0 +1,56 @@
+# a developer installs plait into fake agents, a lead connects a new repository, and the run starts from the Jira key
+chmod 755 bin/claude
+chmod 755 bin/qwen
+env HOME=$WORK/home
+env PATH=$WORK/bin${:}$GITBIN${:}$PLAITBIN
+env GIT_CONFIG_NOSYSTEM=1
+env GIT_AUTHOR_NAME=dev GIT_AUTHOR_EMAIL=dev@example.com GIT_COMMITTER_NAME=dev GIT_COMMITTER_EMAIL=dev@example.com
+env DISABLE_TELEMETRY=1
+
+exec plait setup --json
+stdout '"changed":true'
+exists home/.claude/skills/plait-review/SKILL.md
+exists home/.qwen/skills/plait-review/SKILL.md
+
+mkdir repo
+cd repo
+exec git init -q -b main
+exec plait init --json
+stdout '"changed":true'
+exists .plait/config.yaml
+grep '^@AGENTS.md$' CLAUDE.md
+
+exec plait doctor --json
+stdout '"ok":true'
+stdout '"name":"skills claude","status":"ok"'
+stdout '"name":"deny rules qwen","status":"ok"'
+! stdout '"status":"fail"'
+
+exec plait run new order-retry --key PROJ-1 --json
+stdout '"step":"new"'
+exec plait ctx PROJ-1 --json
+stdout '"run":"PROJ-1-order-retry","step":"new"'
+stdout '"output":\{"cmd":"plait ctx save PROJ-1 --source jira < task.md"\}'
+stdout '"guide":"plait guide ctx"'
+
+stdin ../task.md
+exec plait ctx save PROJ-1 --source jira --json
+stdout '"has_criteria":true,"changed":true,"step":"task_saved"'
+exec plait next --json
+stdout '"step":"task_saved".*"output":\{"cmd":"plait review export"\}'
+stdout '"guide":"plait guide review"'
+
+-- bin/claude --
+#!/bin/sh
+echo '2.1.0 (Claude Code)'
+-- bin/qwen --
+#!/bin/sh
+echo 0.9.1
+-- task.md --
+# Retry failed orders
+
+Orders that fail on payment are retried.
+
+## Acceptance criteria
+
+- a failed order is retried 3 times
