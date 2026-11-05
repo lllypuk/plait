@@ -373,14 +373,14 @@ audit: { redact: true, deny_globs: [".env*", "**/*.pem", "**/secrets/**"] }
 
 ## Аналоги и позиционирование
 
-Ниша плотная. Ближайший аналог — Trellis, его нужно изучить до старта. plait отличается сочетанием трёх вещей: детерминированный Go-бинарь с гейтами и политикой автономии; GitLab self-hosted наравне с GitHub; закрытый корпоративный контур (прокси, внутренние модели, аудит, без Node/Python).
+Ниша плотная, ближайший аналог — Trellis ([разбор аналогов](research/README.md)). По полному roadmap plait отличается сочетанием трёх вещей: детерминированный Go-бинарь с гейтами и политикой автономии; GitLab self-hosted наравне с GitHub; закрытый корпоративный контур (прокси, внутренние модели, аудит, без Node/Python). В v0 этого нет, и отличие v0 уже: ревью привязано к снимку диффа, находки сравниваются между прогонами, описание MR собирается из них.
 
 | Инструмент | Что делает | Что взять | Чем plait отличается |
 | --- | --- | --- | --- |
-| [Trellis](https://docs.trytrellis.app/start/install-and-first-task) | Командный harness: specs, tasks, workflow в `.trellis/`, адаптеры для 13+ агентов | Генерация файлов под каждого агента, `.agents/skills` как общий слой | Node + Python, нет детерминированных гейтов, cross-agent review и MR |
+| [Trellis](https://docs.trytrellis.app/start/install-and-first-task) | Командный harness: specs, tasks, workflow в `.trellis/`, адаптеры для 20+ агентов, ревью Claude/Codex в отдельной сессии (`trellis channel`) | Генерация файлов под каждого агента, `.agents/skills` как общий слой, A/B через `ablate`/`restore` | Node + Python, AGPL; нет детерминированных гейтов, снимка диффа, сравнения находок между прогонами и описания MR |
 | [Superpowers](https://github.com/obra/superpowers) | Skills: brainstorming → plans → execution → review | Промпты брейншторма, формат плана | Один агент, нет состояния и политики |
 | [OpenSpec](https://github.com/Fission-AI/OpenSpec) / Spec Kit | Spec-driven команды внутри агента | Структура `changes/<id>/`, архив изменений | Не создаёт MR, нет ревью другим агентом |
-| [quorum-ai](https://github.com/hugo-lorenzo-mato/quorum-ai) | Go-оркестратор нескольких агентов | Изучить архитектуру и лицензию | Внешний оркестратор, а не инструмент внутри сессии |
+| [quorum-ai](https://github.com/hugo-lorenzo-mato/quorum-ai) | Go-оркестратор нескольких агентов: консенсус по анализу задачи, PR в GitHub | Взвешенные расхождения для этапа 2, trace-манифест прогона; MIT | Внешний оркестратор, а не инструмент внутри сессии; ревью диффа и GitLab нет |
 | [relay](https://github.com/aydinmrnv/relay), [foreman](https://github.com/josh-melton-db/foreman) | План → ревью → реализация → ревью → PR, cross-vendor review | Модель cross-agent review | GitHub-центричны |
 | [MCP Agent Mail](https://pypi.org/project/mcp-agent-mail/) | Inbox/outbox, file leases для агентов через MCP | Модель сообщений и блокировок | Встроено в один бинарь, без демона; лицензия у них не чистый MIT |
 | Claude Code Agent Teams | Mailbox и общий список задач между сессиями Claude | Идею mailbox на файлах | Только Claude, экспериментально |
@@ -422,6 +422,6 @@ audit: { redact: true, deny_globs: [".env*", "**/*.pem", "**/secrets/**"] }
 | Агент обходит гейт | `approve` только через TTY, deny-правила в агентах, аудит |
 | Prompt injection между агентами | Сообщения — данные, права проверяет Go-код |
 | Карточные данные и секреты в контексте | Deny-globs, redaction, PAN-сканер |
-| Конкурент закроет нишу | Изучить Trellis и quorum-ai до старта; фокус на GitLab + enterprise |
+| Конкурент закроет нишу | Trellis и quorum-ai разобраны ([вывод](research/README.md)); Trellis ближе всего, следить за `trellis channel`; фокус на GitLab + enterprise |
 | Процесс измеряет собственное прохождение вместо пользы | Гипотеза и замер против обычного `/review` до расширения; `stats` — только вспомогательные сигналы |
 | Полный flow на мелкой задаче — накладные расходы, разработчик бросает plait | Короткий маршрут по умолчанию, `analyze`/`plan` по необходимости |
