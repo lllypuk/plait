@@ -87,11 +87,27 @@ func Next(st *State) (Instruction, error) {
 			in.Output = Target{Cmd: "plait mr describe"}
 			in.Allowed = append(in.Allowed, cmdMRDescribe)
 		}
+	case StepDescribed:
+		if err := described(st, &in, dir); err != nil {
+			return Instruction{}, err
+		}
 	default:
 		return Instruction{}, BrokenState(st, fmt.Sprintf("unknown step %q", st.Step))
 	}
 	in.Allowed = append(in.Allowed, "next", "run list", "run resume", "run new")
 	return in, nil
+}
+
+func described(st *State, in *Instruction, dir string) error {
+	if _, err := lastReview(st); err != nil {
+		return err
+	}
+	in.Do = "The merge request description is ready: show its title and body to the developer, " +
+		"who creates the merge request; plait does not. After further changes, export a new snapshot for review."
+	in.Inputs = []string{path.Join(dir, "mr.md")}
+	in.Output = Target{Cmd: "plait mr describe"}
+	in.Allowed = []string{cmdMRDescribe, cmdReviewReport, cmdReviewExport, cmdReviewImport, cmdCheckSave}
+	return nil
 }
 
 func lastSnapshot(st *State) (string, error) {

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -226,4 +227,35 @@ func readFile(t *testing.T, path string) string {
 		t.Fatal(err)
 	}
 	return string(b)
+}
+
+func TestRead(t *testing.T) {
+	tests := []struct {
+		name     string
+		in       string
+		key      string
+		title    string
+		criteria []string
+	}{
+		{
+			name:     "list items",
+			in:       "# Retry\n\nBody.\n\n## Acceptance criteria\n\n- [ ] retry 3 times\n  with a backoff\n* [x] log it\n1. no panic\nplain line\n- [ ]\n",
+			key:      "PROJ-7",
+			title:    "PROJ-7: Retry",
+			criteria: []string{"retry 3 times with a backoff", "log it", "no panic", "plain line"},
+		},
+		{name: "gap", in: "# Retry\n", title: "Retry"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			doc, err := task.Normalize(task.Input{Text: []byte(tt.in), Key: tt.key, Source: local})
+			if err != nil {
+				t.Fatal(err)
+			}
+			title, criteria := task.Read(doc.Markdown)
+			if title != tt.title || !slices.Equal(criteria, tt.criteria) {
+				t.Errorf("Read = %q, %q; want %q, %q", title, criteria, tt.title, tt.criteria)
+			}
+		})
+	}
 }

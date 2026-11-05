@@ -79,6 +79,13 @@ func TestNext(t *testing.T) {
 			inputs:    []string{dir + "/findings-2.json"},
 			mustAllow: cmdDescribe,
 		},
+		{
+			name:      "described",
+			st:        run.State{Step: run.StepDescribed, Snapshots: snaps, Reviews: blocking},
+			cmd:       "plait mr describe",
+			inputs:    []string{dir + "/mr.md"},
+			mustAllow: cmdExport,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -110,6 +117,7 @@ func TestNextBrokenState(t *testing.T) {
 		"unknown step":          {ID: "r", Step: "bogus"},
 		"exported, no snapshot": {ID: "r", Step: run.StepExported},
 		"imported, no review":   {ID: "r", Step: run.StepImported},
+		"described, no review":  {ID: "r", Step: run.StepDescribed},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := run.Next(&st)

@@ -149,6 +149,11 @@ func writeTracked(path string, b []byte) error {
 	return nil
 }
 
+// LoadTracked reads findings-<n>.json of a run directory.
+func LoadTracked(runDir string, n int) (TrackedFile, error) {
+	return readTracked(trackedPath(runDir, n))
+}
+
 func readTracked(path string) (TrackedFile, error) {
 	b, err := os.ReadFile(filepath.Clean(path))
 	if errors.Is(err, fs.ErrNotExist) {

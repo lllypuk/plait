@@ -44,6 +44,7 @@ const (
 	StepExported  Step = "exported"
 	StepImported  Step = "imported"
 	StepReported  Step = "reported"
+	StepDescribed Step = "described"
 )
 
 // State is the content of state.json.

@@ -38,6 +38,7 @@ var (
 	headingRe = regexp.MustCompile(`^(#{1,6})\s+(.*?)(?:\s+#+)?\s*$`)
 	markerRe  = regexp.MustCompile(`^\s*<!--\s*plait:.*-->\s*$`)
 	fenceRe   = regexp.MustCompile("^\\s*(```|~~~)")
+	itemRe    = regexp.MustCompile(`^ {0,3}(?:[-*+]|\d{1,9}[.)])\s+(?:\[[ xX]\](?:\s+|$))?(.*)$`)
 )
 
 // Input is what ctx save receives.
@@ -141,6 +142,33 @@ func Save(s *run.Store, in Input) (Result, error) {
 	}
 	res.Changed, res.Step = true, st.Step
 	return res, nil
+}
+
+// Read returns the title and the acceptance criteria items of a task.md written by Save.
+func Read(md []byte) (string, []string) {
+	p := parse(string(md))
+	return p.title, items(p.criteria)
+}
+
+// items splits the criteria section into list items; an indented line continues the item above it.
+func items(lines []string) []string {
+	var out []string
+	for _, l := range lines {
+		t := strings.TrimSpace(l)
+		m := itemRe.FindStringSubmatch(l)
+		switch {
+		case t == "":
+		case m != nil:
+			if it := strings.TrimSpace(m[1]); it != "" {
+				out = append(out, it)
+			}
+		case len(out) > 0 && strings.TrimLeft(l, " \t") != l:
+			out[len(out)-1] += " " + t
+		default:
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 type parsed struct {

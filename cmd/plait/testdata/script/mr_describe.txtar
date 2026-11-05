@@ -1,0 +1,78 @@
+env GIT_CONFIG_NOSYSTEM=1
+env GIT_AUTHOR_NAME=dev GIT_AUTHOR_EMAIL=dev@example.com GIT_COMMITTER_NAME=dev GIT_COMMITTER_EMAIL=dev@example.com
+mkdir repo
+cd repo
+exec git init -q -b main
+cp ../a.txt a.txt
+exec git add -A
+exec git commit -q -m init
+exec git checkout -q -b feature
+exec plait run new order-retry --key PROJ-7
+stdin ../task.md
+exec plait ctx save PROJ-7 --json
+cp ../a2.txt a.txt
+exec plait check save test --exit-code 0 --file ../test.log --json
+
+# nothing to describe before a review is imported
+exitcode 2 plait mr describe --json
+stdout '"code":"no_review".*"fix":"plait review export'
+
+exec plait review export --json
+capture SNAPSHOT '"commit":"([0-9a-f]{40})"'
+expand ../answer.json ../answer-ok.json
+exec plait review import ../answer-ok.json --json
+exec plait review report --json
+
+# fresh snapshot: title with the key, summary from stdin, flagged criterion
+stdin ../summary.md
+exec plait mr describe --summary-file - --json
+stdout '"title":"PROJ-7: Retry failed orders"'
+stdout '"body":"Retries failed orders\.\\n\\n## Task'
+stdout 'every retry is logged — \*\*flagged\*\*'
+stdout '- test: exit 0, fresh'
+stdout '"labels":\["ai-assisted"\],"path":".plait/runs/PROJ-7-order-retry/mr.md","stale":false,"changed":true,"step":"described"'
+exists .plait/runs/PROJ-7-order-retry/mr.md
+exec plait next --json
+stdout '"step":"described".*"inputs":\[".plait/runs/PROJ-7-order-retry/mr.md"\]'
+
+# a repeat with the same data changes nothing
+exec plait mr describe --summary-file ../summary.md --json
+stdout '"changed":false'
+
+# stale snapshot: refused unless allowed, then marked in the body
+cp ../a.txt a.txt
+exitcode 2 plait mr describe --json
+stdout '"code":"snapshot_stale".*plait mr describe --allow-stale'
+exec plait mr describe --allow-stale --json
+stdout '"body":"> \*\*Stale:\*\*.*"stale":true,"changed":true'
+
+# a template outside the repository is refused
+env PLAIT_MR_TEMPLATE=../mr.tmpl
+exitcode 2 plait mr describe --allow-stale --json
+stdout '"code":"mr_template_outside_repo"'
+
+-- a.txt --
+a
+-- a2.txt --
+a changed
+-- test.log --
+ok
+-- task.md --
+# Retry failed orders
+
+Retry orders that failed.
+
+## Acceptance criteria
+
+- a failed order is retried 3 times
+- every retry is logged
+-- summary.md --
+Retries failed orders.
+-- answer.json --
+{
+  "snapshot": "$SNAPSHOT",
+  "coverage": "criteria",
+  "findings": [
+    {"id": "F1", "severity": "minor", "file": "a.txt", "line": 1, "title": "no log", "rationale": "silent", "criterion": "every retry is logged"}
+  ]
+}
