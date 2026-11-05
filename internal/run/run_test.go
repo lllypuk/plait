@@ -167,17 +167,25 @@ func TestMissingRun(t *testing.T) {
 }
 
 func TestCorruptState(t *testing.T) {
-	s := newStore(t)
-	st, _, err := s.New("x", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = os.WriteFile(filepath.Join(s.RunDir(st.ID), "state.json"), []byte("{"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	_, err = s.Current()
-	if e, ok := errors.AsType[*output.Error](err); !ok || e.Kind != output.KindNeedsHuman {
-		t.Errorf("err = %v, want NeedsHuman", err)
+	for name, data := range map[string]string{
+		"not json":  "{",
+		"empty":     "{}",
+		"other run": `{"schema":"plait-state/v1","id":"2026-11-05-other","step":"new"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			s := newStore(t)
+			st, _, err := s.New("x", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = os.WriteFile(filepath.Join(s.RunDir(st.ID), "state.json"), []byte(data), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			_, err = s.Current()
+			if e, ok := errors.AsType[*output.Error](err); !ok || e.Kind != output.KindNeedsHuman {
+				t.Errorf("err = %v, want NeedsHuman", err)
+			}
+		})
 	}
 }
 

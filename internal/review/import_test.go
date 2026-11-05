@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/lllypuk/plait/internal/config"
@@ -112,6 +113,33 @@ func TestImport(t *testing.T) {
 	}
 	if st, err = s.Current(); err != nil || len(st.Reviews) != 1 {
 		t.Errorf("reviews after replace = %+v, err = %v", st, err)
+	}
+}
+
+func TestImportConcurrent(t *testing.T) {
+	_, s, repo, exp := exported(t)
+	answers := [][]byte{
+		answer(exp.Commit, review.CoverageCriteria),
+		answer(exp.Commit, review.CoverageCriteria, findingJSON),
+	}
+	errs := make([]error, len(answers))
+	var wg sync.WaitGroup
+	for i, a := range answers {
+		wg.Go(func() { _, errs[i] = review.Import(t.Context(), s, repo, a, "-") })
+	}
+	wg.Wait()
+	var ok, exists int
+	for _, err := range errs {
+		e, isErr := errors.AsType[*output.Error](err)
+		switch {
+		case err == nil:
+			ok++
+		case isErr && e.Code == "review_exists":
+			exists++
+		}
+	}
+	if ok != 1 || exists != 1 {
+		t.Errorf("concurrent imports: errs = %v, want one success and one review_exists", errs)
 	}
 }
 

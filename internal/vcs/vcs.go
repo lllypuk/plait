@@ -28,7 +28,7 @@ type Repo struct {
 	Root string
 }
 
-// Snapshot is a commit of the working copy on top of Head; Base is the merge-base the diff starts from.
+// Snapshot is the working copy on top of Head; Base is the merge-base the diff starts from.
 type Snapshot struct {
 	Commit string
 	Tree   string
@@ -93,7 +93,7 @@ func (r Repo) CurrentTree(ctx context.Context) (string, error) {
 	return r.line(ctx, env, "write-tree")
 }
 
-// Snapshot commits the working copy without a ref; the same tree on the same HEAD gives the same commit.
+// Snapshot writes the working copy as a tree on top of HEAD; Commit turns it into a commit.
 func (r Repo) Snapshot(ctx context.Context, base string) (Snapshot, error) {
 	mb, err := r.ResolveBase(ctx, base)
 	if err != nil {
@@ -115,21 +115,22 @@ func (r Repo) Snapshot(ctx context.Context, base string) (Snapshot, error) {
 		return Snapshot{}, output.Invalid("empty_diff", "nothing to review: the working copy matches the base",
 			"make the changes to review, then call plait review export again")
 	}
-	date, err := r.line(ctx, nil, "show", "-s", "--format=%ct", head)
+	return Snapshot{Tree: tree, Base: mb, Head: head}, nil
+}
+
+// Commit commits s.Tree on s.Head without a ref; the same tree, head and note give the same commit.
+func (r Repo) Commit(ctx context.Context, s Snapshot, note string) (string, error) {
+	date, err := r.line(ctx, nil, "show", "-s", "--format=%ct", s.Head)
 	if err != nil {
-		return Snapshot{}, err
+		return "", err
 	}
-	// Fixed identity and HEAD's date keep the commit id a function of tree and parent.
+	// Fixed identity and HEAD's date keep the commit id a function of tree, parent and note.
 	env := []string{
 		"GIT_AUTHOR_NAME=" + identityName, "GIT_AUTHOR_EMAIL=" + identityEmail,
 		"GIT_COMMITTER_NAME=" + identityName, "GIT_COMMITTER_EMAIL=" + identityEmail,
 		"GIT_AUTHOR_DATE=@" + date + " +0000", "GIT_COMMITTER_DATE=@" + date + " +0000",
 	}
-	commit, err := r.line(ctx, env, "commit-tree", "--no-gpg-sign", "-p", head, "-m", snapshotMsg, tree)
-	if err != nil {
-		return Snapshot{}, err
-	}
-	return Snapshot{Commit: commit, Tree: tree, Base: mb, Head: head}, nil
+	return r.line(ctx, env, "commit-tree", "--no-gpg-sign", "-p", s.Head, "-m", snapshotMsg, "-m", note, s.Tree)
 }
 
 // SetRef points ref at commit, keeping the snapshot reachable for git gc.
@@ -138,9 +139,9 @@ func (r Repo) SetRef(ctx context.Context, ref, commit string) error {
 	return err
 }
 
-// Diff returns the unified diff from base to commit.
-func (r Repo) Diff(ctx context.Context, base, commit string) (string, error) {
-	return r.git(ctx, nil, "diff", "--no-color", "--no-ext-diff", base, commit, "--")
+// Diff returns the unified diff from base to a commit or tree.
+func (r Repo) Diff(ctx context.Context, base, to string) (string, error) {
+	return r.git(ctx, nil, "diff", "--no-color", "--no-ext-diff", base, to, "--")
 }
 
 func (r Repo) head(ctx context.Context) (string, error) {

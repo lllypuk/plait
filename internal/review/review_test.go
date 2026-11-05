@@ -215,9 +215,11 @@ func TestExportNewTaskSameTree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if second.Snapshot != 2 || second.Commit != first.Commit || second.Coverage != review.CoverageCriteria {
-		t.Errorf("export after a new task = %+v, want snapshot 2 of the same commit with criteria", second)
+	if second.Snapshot != 2 || second.Commit == first.Commit || second.Coverage != review.CoverageCriteria {
+		t.Errorf("export after a new task = %+v, want snapshot 2 with another commit and criteria", second)
 	}
+	_, err = review.Import(t.Context(), s, repo, answer(first.Commit, review.CoverageCriteria), "-")
+	wantInvalid(t, err, "snapshot_mismatch")
 }
 
 func checkPackage(t *testing.T, pkg, commit string) {

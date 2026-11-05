@@ -110,6 +110,11 @@ func Save(s *run.Store, in Input) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	unlock, err := s.Lock()
+	if err != nil {
+		return Result{}, err
+	}
+	defer unlock()
 	st, err := s.Current()
 	if err != nil {
 		return Result{}, err

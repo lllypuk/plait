@@ -92,6 +92,9 @@ func TestSnapshotContent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if s.Commit, err = r.Commit(t.Context(), s, "package x"); err != nil {
+		t.Fatal(err)
+	}
 	if err = r.SetRef(t.Context(), ref, s.Commit); err != nil {
 		t.Fatal(err)
 	}
@@ -154,6 +157,16 @@ func TestSnapshotRepeatAndChangedAfter(t *testing.T) {
 	if s1 != s2 {
 		t.Errorf("repeat snapshot = %+v, want %+v", s2, s1)
 	}
+	c1, err := r.Commit(t.Context(), s1, "package x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c2, _ := r.Commit(t.Context(), s2, "package x"); c2 != c1 {
+		t.Errorf("repeat commit = %s, want %s", c2, c1)
+	}
+	if other, _ := r.Commit(t.Context(), s1, "package y"); other == c1 {
+		t.Error("another note reused the commit")
+	}
 	tree, err := r.CurrentTree(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -175,8 +188,8 @@ func TestSnapshotRepeatAndChangedAfter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s3.Commit == s1.Commit {
-		t.Error("snapshot after change reused the commit")
+	if s3.Tree == s1.Tree {
+		t.Error("snapshot after change reused the tree")
 	}
 }
 

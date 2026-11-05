@@ -110,6 +110,11 @@ func ParseAnswer(data []byte, name string) (Answer, error) {
 
 // Import binds the answer to the last snapshot of the current run and saves it as review-<n>.json.
 func Import(ctx context.Context, s *run.Store, repo vcs.Repo, data []byte, name string) (ImportResult, error) {
+	unlock, err := s.Lock()
+	if err != nil {
+		return ImportResult{}, err
+	}
+	defer unlock()
 	st, err := s.Current()
 	if err != nil {
 		return ImportResult{}, err

@@ -263,6 +263,11 @@ func (s *Store) read(id string) (*State, error) {
 		return nil, output.NeedsHuman("state_corrupt", fmt.Sprintf("%s is not valid JSON: %v", path, err),
 			"stop and ask a human to repair or remove "+path)
 	}
+	if st.Schema != StateSchema || st.ID != id {
+		return nil, output.NeedsHuman("state_corrupt",
+			fmt.Sprintf("%s has schema %q and id %q, want %s and %s", path, st.Schema, st.ID, StateSchema, id),
+			"stop and ask a human to repair or remove "+path)
+	}
 	return &st, nil
 }
 

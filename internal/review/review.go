@@ -4,7 +4,9 @@ package review
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	_ "embed"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -123,6 +125,11 @@ func LoadRules(root string, paths []string) ([]Rule, error) {
 
 // Export snapshots the working copy and writes the package; an unchanged working copy, task and rules keep the last snapshot.
 func Export(ctx context.Context, s *run.Store, repo vcs.Repo, cfg config.Review) (ExportResult, error) {
+	unlock, err := s.Lock()
+	if err != nil {
+		return ExportResult{}, err
+	}
+	defer unlock()
 	st, err := s.Current()
 	if err != nil {
 		return ExportResult{}, err
@@ -144,14 +151,17 @@ func Export(ctx context.Context, s *run.Store, repo vcs.Repo, cfg config.Review)
 	if err != nil {
 		return ExportResult{}, err
 	}
-	diff, err := repo.Diff(ctx, snap.Base, snap.Commit)
+	diff, err := repo.Diff(ctx, snap.Base, snap.Tree)
 	if err != nil {
 		return ExportResult{}, err
 	}
 	p := Package{
-		Run: st.ID, Commit: snap.Commit, Base: snap.Base,
-		Coverage: coverage(st.Task), Task: string(taskMD), Rules: rules, Diff: diff,
+		Run: st.ID, Base: snap.Base, Coverage: coverage(st.Task), Task: string(taskMD), Rules: rules, Diff: diff,
 	}
+	if snap.Commit, err = commitPackage(ctx, repo, snap, p); err != nil {
+		return ExportResult{}, err
+	}
+	p.Commit = snap.Commit
 
 	n, md, reused, err := chooseSnapshot(st, runDir, p)
 	if err != nil {
@@ -182,6 +192,17 @@ func Export(ctx context.Context, s *run.Store, repo vcs.Repo, cfg config.Review)
 		Run: st.ID, Snapshot: n, Commit: snap.Commit, Base: snap.Base, Coverage: p.Coverage,
 		Package: filepath.ToSlash(path), Changed: !reused, Step: st.Step,
 	}, nil
+}
+
+// commitPackage stamps the snapshot commit with a digest of the package, so the commit id an answer names
+// tells apart packages of one tree with another task, rules or template.
+func commitPackage(ctx context.Context, repo vcs.Repo, snap vcs.Snapshot, p Package) (string, error) {
+	draft, err := Render(p)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(draft)
+	return repo.Commit(ctx, snap, "package "+hex.EncodeToString(sum[:]))
 }
 
 // chooseSnapshot keeps the last snapshot when its package.md is byte-equal, so a written package never changes.

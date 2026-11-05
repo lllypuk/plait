@@ -128,6 +128,11 @@ func RenderReport(r Report) ([]byte, error) {
 
 // BuildReport reads the last imported review of the current run and moves the run from imported to reported.
 func BuildReport(ctx context.Context, s *run.Store, repo vcs.Repo) (Report, error) {
+	unlock, err := s.Lock()
+	if err != nil {
+		return Report{}, err
+	}
+	defer unlock()
 	st, err := s.Current()
 	if err != nil {
 		return Report{}, err
