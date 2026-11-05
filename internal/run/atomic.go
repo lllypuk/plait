@@ -6,7 +6,12 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 )
+
+// staleAge keeps a temporary file of a concurrent writer from being taken for a crash leftover.
+const staleAge = time.Minute
 
 // WriteFile replaces path atomically via a temporary file and rename; it first removes temporaries left by a crash.
 func WriteFile(path string, data []byte) error {
@@ -14,11 +19,11 @@ func WriteFile(path string, data []byte) error {
 	if dir == "" {
 		dir = "."
 	}
-	pattern := "." + base + ".tmp-*"
-	if err := removeStale(filepath.Join(dir, pattern)); err != nil {
+	prefix := "." + base + ".tmp-"
+	if err := removeStale(dir, prefix); err != nil {
 		return err
 	}
-	f, err := os.CreateTemp(dir, pattern)
+	f, err := os.CreateTemp(dir, prefix+"*")
 	if err != nil {
 		return fmt.Errorf("create temp file for %s: %w", path, err)
 	}
@@ -42,13 +47,21 @@ func writeAndClose(f *os.File, data []byte) error {
 	return errors.Join(werr, f.Close())
 }
 
-func removeStale(glob string) error {
-	stale, err := filepath.Glob(glob)
-	if err != nil {
+// removeStale lists dir instead of globbing, so glob metacharacters in the path do not break the match.
+func removeStale(dir, prefix string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("find stale temp files: %w", err)
 	}
-	for _, p := range stale {
-		if rmErr := os.Remove(p); rmErr != nil && !errors.Is(rmErr, fs.ErrNotExist) {
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasPrefix(e.Name(), prefix) {
+			continue
+		}
+		info, infoErr := e.Info()
+		if infoErr != nil || time.Since(info.ModTime()) < staleAge {
+			continue
+		}
+		if rmErr := os.Remove(filepath.Join(dir, e.Name())); rmErr != nil && !errors.Is(rmErr, fs.ErrNotExist) {
 			return fmt.Errorf("remove stale temp file: %w", rmErr)
 		}
 	}

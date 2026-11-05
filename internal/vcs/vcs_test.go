@@ -191,6 +191,23 @@ func TestSnapshotEmptyDiff(t *testing.T) {
 	}
 }
 
+func TestResolveBaseSkipsUnrelatedOriginHEAD(t *testing.T) {
+	dir := newRepo(t, "main")
+	want := git(t, dir, "rev-parse", "HEAD")
+	git(t, dir, "checkout", "-q", "--orphan", "foreign")
+	commit(t, dir, "foreign")
+	git(t, dir, "update-ref", "refs/remotes/origin/foreign", "HEAD")
+	git(t, dir, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/foreign")
+	git(t, dir, "checkout", "-q", "main")
+	git(t, dir, "checkout", "-q", "-b", "feature")
+	commit(t, dir, "on feature")
+
+	got, err := vcs.Repo{Root: dir}.ResolveBase(t.Context(), "")
+	if err != nil || got != want {
+		t.Errorf("base = %s, %v; want %s", got, err, want)
+	}
+}
+
 func TestResolveBase(t *testing.T) {
 	tests := []struct {
 		name       string

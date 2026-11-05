@@ -41,7 +41,7 @@ func SnapshotRef(id string, n int) string {
 	return snapshotsRef + "/" + id + "/" + strconv.Itoa(n)
 }
 
-// ResolveBase returns merge-base of HEAD and the configured base, or of origin/HEAD, main, master when it is empty.
+// ResolveBase returns merge-base of HEAD and the configured base, or of the first of origin/HEAD, main, master related to HEAD.
 func (r Repo) ResolveBase(ctx context.Context, configured string) (string, error) {
 	if _, err := r.head(ctx); err != nil {
 		return "", err
@@ -50,16 +50,22 @@ func (r Repo) ResolveBase(ctx context.Context, configured string) (string, error
 	if configured != "" {
 		candidates = []string{configured}
 	}
+	var unrelated error
 	for _, c := range candidates {
 		if strings.HasPrefix(c, "-") || !r.exists(ctx, c) {
 			continue
 		}
 		mb, err := r.line(ctx, nil, "merge-base", "HEAD", c)
-		if err != nil {
-			return "", output.Invalid("no_merge_base",
+		if err == nil {
+			return mb, nil
+		}
+		if unrelated == nil {
+			unrelated = output.Invalid("no_merge_base",
 				fmt.Sprintf("HEAD and base %q have no common ancestor", c), baseFix)
 		}
-		return mb, nil
+	}
+	if unrelated != nil {
+		return "", unrelated
 	}
 	if configured != "" {
 		return "", output.Invalid("base_not_found", fmt.Sprintf("review base %q not found", configured), baseFix)

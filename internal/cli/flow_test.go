@@ -16,8 +16,10 @@ const (
 	flowTask = "# Retry failed orders\n\nRetry orders that failed.\n\n## Acceptance criteria\n\n- retried 3 times\n"
 	runID    = "PROJ-1-retry"
 
-	unchangedJSON = `"changed":false`
-	nextCmd       = "next"
+	unchangedJSON  = `"changed":false`
+	nextCmd        = "next"
+	ctxSaveCmd     = "ctx save"
+	importStdinCmd = "review import -"
 )
 
 type flowCase struct {
@@ -118,10 +120,12 @@ func TestFlow(t *testing.T) {
 				{cmd: "run list", want: "* " + runID + "  new", asJSON: `"current":true`},
 				{cmd: nextCmd, want: "then: plait ctx save < task.md", asJSON: `"step":"new"`},
 
-				{cmd: "ctx save", noIn: true, code: 2, want: "fix: pipe it", asJSON: `"code":"no_task_input"`},
+				{cmd: ctxSaveCmd, noIn: true, code: 2, want: "fix: pipe it", asJSON: `"code":"no_task_input"`},
 				{cmd: "ctx save --file missing.md", code: 2, want: "fix: write the task",
 					asJSON: `"code":"task_file_not_found"`},
-				{cmd: "ctx save", stdin: flowTask, want: "(acceptance criteria present)\nnext: plait review export",
+				{cmd: ctxSaveCmd, stdin: strings.Repeat("x", 1<<20+1), code: 2, want: "fix: save only the summary",
+					asJSON: `"code":"task_too_large"`},
+				{cmd: ctxSaveCmd, stdin: flowTask, want: "(acceptance criteria present)\nnext: plait review export",
 					asJSON: `"has_criteria":true`},
 				{cmd: "ctx save --file task.md", want: "unchanged", asJSON: unchangedJSON},
 				{cmd: nextCmd, want: "input: .plait/runs/" + runID + "/task.md", asJSON: `"step":"task_saved"`},
@@ -140,11 +144,13 @@ func TestFlow(t *testing.T) {
 				`"file":"retry.go","line":3,"title":"no retry","rationale":"Retry does nothing","criterion":"retried 3 times"}]}`
 			writeFile(t, dir, "answer.json", answer)
 			for _, c := range []flowCase{
-				{cmd: "review import -", code: 2, want: "fix: pipe it", asJSON: `"code":"no_answer_input"`},
+				{cmd: importStdinCmd, code: 2, want: "fix: pipe it", asJSON: `"code":"no_answer_input"`},
+				{cmd: importStdinCmd, stdin: strings.Repeat("x", 4<<20+1), code: 2, want: "answer is over",
+					asJSON: `"code":"answer_too_large"`},
 				{cmd: "review import missing.json", code: 2, want: "fix: save the fresh session",
 					asJSON: `"code":"answer_not_found"`},
 				{cmd: "review import answer.json", want: "imported .plait/runs/" + runID, asJSON: `"findings":1,`},
-				{cmd: "review import -", stdin: answer, want: "unchanged", asJSON: unchangedJSON},
+				{cmd: importStdinCmd, stdin: answer, want: "unchanged", asJSON: unchangedJSON},
 				{cmd: nextCmd, want: "then: plait review report", asJSON: `"step":"imported"`},
 				{cmd: "review report", want: "no retry", asJSON: `"step":"reported"`},
 			} {

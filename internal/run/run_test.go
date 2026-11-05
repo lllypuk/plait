@@ -192,13 +192,17 @@ func TestLeftoverTempFile(t *testing.T) {
 	if err = os.WriteFile(leftover, []byte(`{"id":"broken`), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	old := time.Now().Add(-time.Hour)
+	if err = os.Chtimes(leftover, old, old); err != nil {
+		t.Fatal(err)
+	}
 
 	got, err := s.Load(st.ID)
 	if err != nil || got.ID != st.ID {
 		t.Fatalf("Load with leftover temp = %v, %v", got, err)
 	}
 	if runs, listErr := s.List(); listErr != nil || len(runs) != 1 {
-		t.Fatalf("List with leftover temp = %v, %v", runs, err)
+		t.Fatalf("List with leftover temp = %v, %v", runs, listErr)
 	}
 
 	if err = s.Save(got); err != nil {
@@ -213,6 +217,24 @@ func TestLeftoverTempFile(t *testing.T) {
 	}
 	if len(entries) != 1 {
 		t.Errorf("run dir has %d entries, want only state.json", len(entries))
+	}
+}
+
+func TestWriteFileKeepsFreshTemp(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "repo[1")
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "f")
+	fresh := filepath.Join(dir, ".f.tmp-concurrent")
+	if err := os.WriteFile(fresh, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := run.WriteFile(path, []byte("one")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(fresh); err != nil {
+		t.Errorf("temp file of a concurrent writer removed: %v", err)
 	}
 }
 

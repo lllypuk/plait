@@ -33,6 +33,10 @@ plait review report                     # findings by severity, coverage label, 
 plait next --json                       # what to do next, at any step
 ```
 
+`plait run list` and `plait run resume <id>` switch the current run. Run state lives in `.plait/` in the working copy: it is left out of snapshots, but add it to the repository's `.gitignore` yourself. Snapshots never touch your index or branches, and `refs/plait/*` are not pushed.
+
+Config layers, later wins: built-in defaults → `/etc/plait/config.yaml` → `~/.config/plait/config.yaml` (honours `XDG_CONFIG_HOME`) → `.plait/config.yaml` → `PLAIT_*` env (`PLAIT_REVIEW_BASE`, lists comma-separated) → flags. Keys: `review.base` — the diff base; `review.rules` — repo files put into the review package, inside the repository only (default `AGENTS.md`, `CLAUDE.md`, `.plait/rules.md`).
+
 Outside a TTY or with `--json` every command answers with JSON; exit codes are 0 ok, 2 invalid input, 3 forbidden by policy, 4 needs a human.
 
 ## Design goals
