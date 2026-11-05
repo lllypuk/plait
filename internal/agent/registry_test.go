@@ -62,7 +62,7 @@ func TestBuiltin(t *testing.T) {
 	}{
 		{claude, claude, "~/.claude/skills", ".claude/skills", "CLAUDE.md", agent.WriterClaudeSettings,
 			"ANTHROPIC_BASE_URL", true},
-		{qwen, qwen, qwenSkills, ".qwen/skills", "QWEN.md", agent.WriterNone, "OPENAI_BASE_URL", false},
+		{qwen, qwen, qwenSkills, ".qwen/skills", "QWEN.md", agent.WriterQwenSettings, "OPENAI_BASE_URL", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

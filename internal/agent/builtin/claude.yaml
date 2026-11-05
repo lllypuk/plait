@@ -17,3 +17,4 @@ telemetry_off:
   - json: { file: ~/.claude/settings.json, path: env.DISABLE_TELEMETRY }
   - json: { file: ~/.claude/settings.json, path: env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC }
 model_endpoint_env: ANTHROPIC_BASE_URL
+session_env: CLAUDECODE

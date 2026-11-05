@@ -53,7 +53,8 @@
         }
       }
     },
-    "model_endpoint_env": {"description": "Variable holding the model endpoint URL.", "type": "string"}
+    "model_endpoint_env": {"description": "Variable holding the model endpoint URL.", "type": "string"},
+    "session_env": {"description": "Variable the agent sets to 1 in the shell of its tools; names the agent in the audit log.", "type": "string", "minLength": 1}
   },
   "$defs": {
     "scopes": {

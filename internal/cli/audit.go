@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/lllypuk/plait/internal/agent"
 	"github.com/lllypuk/plait/internal/audit"
 	"github.com/lllypuk/plait/internal/output"
 	"github.com/lllypuk/plait/internal/run"
@@ -22,7 +23,7 @@ func (a *app) audited(cmd *cobra.Command, root string, fn func(s *run.Store, e *
 	e := audit.Entry{
 		Version: a.opts.Version,
 		Cmd:     strings.TrimPrefix(cmd.CommandPath(), cmd.Root().Name()+" "),
-		Agent:   audit.Agent(os.Getenv),
+		Agent:   audit.Agent(os.Getenv, builtinAgents()),
 	}
 	if st, curErr := s.Current(); curErr == nil {
 		e.Run, e.StepFrom = st.ID, string(st.Step)
@@ -42,4 +43,13 @@ func (a *app) audited(cmd *cobra.Command, root string, fn func(s *run.Store, e *
 		return output.Internal(appendErr)
 	}
 	return err
+}
+
+// builtinAgents leaves out agents.<name> of the config, so a broken config does not cost the audit line.
+func builtinAgents() []agent.Descriptor {
+	r, err := agent.Load(nil)
+	if err != nil {
+		return nil
+	}
+	return r.All()
 }

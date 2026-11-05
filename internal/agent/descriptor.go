@@ -25,6 +25,7 @@ const Schema = "plait-agent/v1"
 const (
 	WriterNone           = "none"
 	WriterClaudeSettings = "claude-settings"
+	WriterQwenSettings   = "qwen-settings"
 )
 
 const (
@@ -48,7 +49,7 @@ var compiledSchema = sync.OnceValues(func() (*jsonschema.Schema, error) { //noli
 })
 
 // Writers lists the permission formats plait can write; each needs a writer in the installer.
-func Writers() []string { return []string{WriterClaudeSettings, WriterNone} }
+func Writers() []string { return []string{WriterClaudeSettings, WriterQwenSettings, WriterNone} }
 
 // merge returns base with over applied: nested maps merge, any other value replaces.
 func merge(base, over map[string]any) map[string]any {

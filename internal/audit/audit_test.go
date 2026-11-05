@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lllypuk/plait/internal/agent"
 	"github.com/lllypuk/plait/internal/audit"
 )
 
@@ -81,6 +82,8 @@ func TestAppendTruncates(t *testing.T) {
 	}
 }
 
+const sessionAgent = "cc"
+
 func TestAgent(t *testing.T) {
 	for _, tt := range []struct {
 		name string
@@ -88,12 +91,14 @@ func TestAgent(t *testing.T) {
 		want string
 	}{
 		{"explicit", map[string]string{"PLAIT_AGENT": "codex", claudeEnv: "1"}, "codex"},
-		{"claude code", map[string]string{claudeEnv: "1"}, "claude"},
+		{"session env", map[string]string{claudeEnv: "1"}, sessionAgent},
 		{"claude code off", map[string]string{claudeEnv: "0"}, unknownAgent},
 		{"nothing", nil, unknownAgent},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := audit.Agent(func(k string) string { return tt.env[k] }); got != tt.want {
+			agents := []agent.Descriptor{{Name: "other", SessionEnv: "OTHER"},
+				{Name: sessionAgent, SessionEnv: claudeEnv}}
+			if got := audit.Agent(func(k string) string { return tt.env[k] }, agents); got != tt.want {
 				t.Errorf("Agent = %q, want %q", got, tt.want)
 			}
 		})

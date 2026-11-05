@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/lllypuk/plait/internal/agent"
 )
 
 // FileName is the audit log in the run directory.
@@ -62,13 +64,15 @@ func SHA256(b []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// Agent names the coding agent from PLAIT_AGENT or its own environment.
-func Agent(getenv func(string) string) string {
+// Agent names the coding agent from PLAIT_AGENT, else the first of agents whose session_env is 1.
+func Agent(getenv func(string) string, agents []agent.Descriptor) string {
 	if a := getenv("PLAIT_AGENT"); a != "" {
 		return a
 	}
-	if getenv("CLAUDECODE") == "1" {
-		return "claude"
+	for _, d := range agents {
+		if d.SessionEnv != "" && getenv(d.SessionEnv) == "1" {
+			return d.Name
+		}
 	}
 	return agentUnknown
 }

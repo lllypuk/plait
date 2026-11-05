@@ -30,6 +30,7 @@ type Descriptor struct {
 	Permissions      Permissions    `json:"permissions"`
 	TelemetryOff     []Condition    `json:"telemetry_off,omitempty"`
 	ModelEndpointEnv string         `json:"model_endpoint_env,omitempty"`
+	SessionEnv       string         `json:"session_env,omitempty"`
 }
 
 // Scopes holds a path per install scope: User starts with ~/, Project is relative to the repository root.
