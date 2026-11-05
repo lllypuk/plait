@@ -1,0 +1,43 @@
+# Review package: run {{.Run}}, snapshot {{.N}}
+
+You are the reviewer in a fresh session. You did not write this change and you do not know why the author made it: judge only the task, the repository rules and the diff below. Do not edit files and do not run commands that change the repository.
+
+- Snapshot: `{{.Commit}}`
+- Base: `{{.Base}}`
+- Coverage: `{{.Coverage}}`
+{{- if eq .Coverage "criteria"}}
+
+Check that the diff meets every acceptance criterion of the task, then look for defects and violations of the repository rules. A finding that breaks a criterion quotes it in `criterion`.
+{{- else}}
+
+The task has no acceptance criteria, so only the diff is checked: look for defects and violations of the repository rules. Do not invent criteria and do not set `criterion`.
+{{- end}}
+
+## Task
+
+{{fence .Task "markdown"}}
+
+## Repository rules
+{{- range .Rules}}
+
+### {{.Path}}
+
+{{fence .Content "markdown"}}
+{{- else}}
+
+No rule files in this repository.
+{{- end}}
+
+## Diff
+
+`git diff {{.Base}} {{.Commit}}`
+
+{{fence .Diff "diff"}}
+
+## Answer
+
+Answer with one JSON object and nothing else, valid against the schema `{{.Schema}}` below. Set `snapshot` to `{{.Commit}}` and `coverage` to `{{.Coverage}}`. Report each defect once with `file` and `line` in the snapshot; an empty `findings` list is a valid answer when there are none.
+
+Severity: `blocker` — must not be merged; `major` — wrong behaviour or a broken rule; `minor` — a real but small problem; `nit` — style or wording.
+
+{{fence .SchemaJSON "json"}}

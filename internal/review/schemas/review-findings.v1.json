@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/lllypuk/plait/schemas/review-findings.v1.json",
+  "title": "review-findings/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["snapshot", "coverage", "findings"],
+  "properties": {
+    "snapshot": {
+      "description": "Commit id of the reviewed snapshot, copied from the package.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$"
+    },
+    "coverage": {
+      "description": "criteria: checked against the task acceptance criteria; diff_only: the task has none, only the diff was checked.",
+      "enum": ["criteria", "diff_only"]
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "severity", "file", "line", "title", "rationale"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"},
+          "severity": {"enum": ["blocker", "major", "minor", "nit"]},
+          "file": {"description": "Path from the repository root.", "type": "string", "minLength": 1},
+          "line": {"description": "Line in the snapshot; 0 when the finding is about the whole file.", "type": "integer", "minimum": 0},
+          "title": {"type": "string", "minLength": 1},
+          "rationale": {"description": "Why it is a defect and what breaks.", "type": "string", "minLength": 1},
+          "criterion": {"description": "The acceptance criterion the finding violates, quoted from the task.", "type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}

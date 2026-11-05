@@ -87,8 +87,8 @@ func (r Repo) CurrentTree(ctx context.Context) (string, error) {
 	return r.line(ctx, env, "write-tree")
 }
 
-// Snapshot commits the working copy and points ref at it; the same tree on the same HEAD gives the same commit.
-func (r Repo) Snapshot(ctx context.Context, ref, base string) (Snapshot, error) {
+// Snapshot commits the working copy without a ref; the same tree on the same HEAD gives the same commit.
+func (r Repo) Snapshot(ctx context.Context, base string) (Snapshot, error) {
 	mb, err := r.ResolveBase(ctx, base)
 	if err != nil {
 		return Snapshot{}, err
@@ -123,10 +123,13 @@ func (r Repo) Snapshot(ctx context.Context, ref, base string) (Snapshot, error) 
 	if err != nil {
 		return Snapshot{}, err
 	}
-	if _, err = r.git(ctx, nil, "update-ref", ref, commit); err != nil {
-		return Snapshot{}, err
-	}
 	return Snapshot{Commit: commit, Tree: tree, Base: mb, Head: head}, nil
+}
+
+// SetRef points ref at commit, keeping the snapshot reachable for git gc.
+func (r Repo) SetRef(ctx context.Context, ref, commit string) error {
+	_, err := r.git(ctx, nil, "update-ref", ref, commit)
+	return err
 }
 
 // Diff returns the unified diff from base to commit.

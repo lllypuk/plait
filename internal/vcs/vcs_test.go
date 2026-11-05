@@ -88,8 +88,11 @@ func TestSnapshotContent(t *testing.T) {
 
 	r := vcs.Repo{Root: dir}
 	ref := vcs.SnapshotRef("2026-11-05-x", 1)
-	s, err := r.Snapshot(t.Context(), ref, "")
+	s, err := r.Snapshot(t.Context(), "")
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err = r.SetRef(t.Context(), ref, s.Commit); err != nil {
 		t.Fatal(err)
 	}
 
@@ -140,11 +143,11 @@ func TestSnapshotRepeatAndChangedAfter(t *testing.T) {
 	write(t, dir, "a.txt", "v1\n")
 	r := vcs.Repo{Root: dir}
 
-	s1, err := r.Snapshot(t.Context(), vcs.SnapshotRef("run", 1), "")
+	s1, err := r.Snapshot(t.Context(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	s2, err := r.Snapshot(t.Context(), vcs.SnapshotRef("run", 2), "")
+	s2, err := r.Snapshot(t.Context(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +171,7 @@ func TestSnapshotRepeatAndChangedAfter(t *testing.T) {
 	if tree, _ = r.CurrentTree(t.Context()); tree == s1.Tree {
 		t.Error("changed working copy: tree equals snapshot")
 	}
-	s3, err := r.Snapshot(t.Context(), vcs.SnapshotRef("run", 3), "")
+	s3, err := r.Snapshot(t.Context(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +184,7 @@ func TestSnapshotEmptyDiff(t *testing.T) {
 	dir := newRepo(t, "main")
 	write(t, dir, ".plait/state.json", "{}\n")
 	write(t, dir, "x.log", "ignored\n")
-	_, err := vcs.Repo{Root: dir}.Snapshot(t.Context(), vcs.SnapshotRef("run", 1), "")
+	_, err := vcs.Repo{Root: dir}.Snapshot(t.Context(), "")
 	wantKind(t, err, "empty_diff")
 	if out := git(t, dir, "for-each-ref", "refs/plait"); out != "" {
 		t.Errorf("ref written for empty diff: %s", out)
@@ -297,6 +300,6 @@ func TestNoHead(t *testing.T) {
 	_, err := r.CurrentTree(t.Context())
 	wantKind(t, err, "no_head")
 	git(t, dir, "init", "-q", "-b", "main")
-	_, err = r.Snapshot(t.Context(), vcs.SnapshotRef("run", 1), "")
+	_, err = r.Snapshot(t.Context(), "")
 	wantKind(t, err, "no_head")
 }
