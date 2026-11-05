@@ -1,0 +1,4 @@
+review:
+  # Empty: origin/HEAD, then main, then master.
+  base: ""
+  rules: [AGENTS.md, CLAUDE.md, .plait/rules.md]
