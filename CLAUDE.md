@@ -6,26 +6,33 @@ plait — Go CLI, которой пользуются coding-агенты (Claud
 
 ## Состояние
 
-Кода ещё нет. Источник истины — `docs/plait-brief.md`: архитектура, интерфейсы (`Agent`, `Installer`, `Stage`, `Forge`), схема конфига, roadmap. Начинаем с шага 1 roadmap — v0, её объём и обещание в разделе «Первая версия». Отступая от брифа, правь бриф в том же изменении.
+Готов сквозной срез v0 (`docs/plans/20261105-01-v0-slice.md`); остаток v0 — план 02+. Источник истины — `docs/plait-brief.md`: архитектура, интерфейсы (`Agent`, `Installer`, `Stage`, `Forge`), схема конфига, roadmap. Начинаем с шага 1 roadmap — v0, её объём и обещание в разделе «Первая версия». Отступая от брифа, правь бриф в том же изменении.
 
 `private/` в `.gitignore` и есть только локально: там контекст конкретного внедрения. Названия, детали и примеры оттуда в отслеживаемые файлы, коммиты и issues не переносить: репозиторий публичный.
 
 ## Команды
 
-Планируемые, по `docs/development-plan.md`; уточнить, когда появятся `Makefile` и `go.mod`. Всё запускается через make, CI вызывает те же цели:
+CI вызывает те же make-цели:
 
 ```sh
-make build
-make test
-go test ./internal/pipeline -run TestName
-make lint      # golangci-lint, gosec внутри него
-make vuln      # govulncheck
-make check     # всё перед коммитом
+make build                     # bin/plait, версия из git describe
+make test                      # go test -race ./...
+go test ./internal/run -run TestName
+go test ./cmd/plait -run 'TestScript/e2e_stale'   # один testscript из cmd/plait/testdata/script/
+make lint                      # golangci-lint, gosec внутри него
+make vuln                      # govulncheck
+make check                     # fmt-check, test, lint, vuln — перед коммитом
 ```
+
+Golden-файлы `internal/review/testdata` обновляет `go test ./internal/review -update`.
+
+## Раскладка
+
+Срез отошёл от целевой раскладки брифа: `internal/run` держит run, `state.json` и `next` (в брифе — `pipeline`), `internal/review` — пакет, схему, импорт и отчёт (в брифе — `artifact`), `internal/task` — `ctx save`, `internal/output` — контракт вывода. Сливать с брифом, когда появятся стадии.
 
 ## Инварианты, которые легко нарушить
 
-- **Процессом управляет Go-код, а не промпт.** Переходы стадий, валидация артефактов и проверка автономии живут в `internal/pipeline`. Skills тонкие (20–40 строк), подробные инструкции агент получает из `plait guide <stage>`.
+- **Процессом управляет Go-код, а не промпт.** Переходы стадий, валидация артефактов и проверка автономии живут в Go-пакетах (пока `internal/run` и `internal/review`). Skills тонкие (20–40 строк), подробные инструкции агент получает из `plait guide <stage>`.
 - **Контракт вывода для агента.** Не в TTY или с `--json` — JSON по версионированной схеме (`review-verdict/v1`). Exit codes: 0 ок, 2 — невалидный артефакт, 3 — запрещено политикой, 4 — нужен человек. Текст ошибки — инструкция агенту, что исправить и какую команду вызвать. В неинтерактивном режиме вопросов не задаём; команды идемпотентны.
 - **`approve`/`reject` работают только в интерактивном TTY**: так агент не может одобрить сам себя, потому что его Bash-инструмент работает без TTY.
 - **Ноль патчей под конкретную организацию в `internal/`.** Всё, чем отличается корпоративная установка, задаётся конфигом (`/etc/plait/config.yaml` → `~/.config/plait` → `.plait/config.yaml` → env → flags), оверлеем промптов, хуками стадий и наследованием адаптеров (`base: qwen`).

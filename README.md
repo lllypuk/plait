@@ -4,7 +4,7 @@ A Go CLI used by coding agents, not people. It walks Claude Code, Codex, Gemini 
 
 Process logic, checks and gates live in a deterministic binary, not in a prompt. The developer stays in their own agent and calls a skill such as `/plait-review`; the agent asks `plait next` what to do and saves results through `plait`.
 
-> **Status:** pre-alpha, no code yet. Design docs are in Russian.
+> **Status:** pre-alpha. The first end-to-end slice of v0 works; setup, doctor and run comparison do not exist yet. Design docs are in Russian.
 
 ## First version (v0)
 
@@ -17,6 +17,23 @@ Process logic, checks and gates live in a deterministic binary, not in a prompt.
 A second agent from another vendor reviewing read-only comes next, as an opt-in.
 
 plait assists the process; it does not enforce it. An agent can edit code without calling plait. Making the flow mandatory for merge takes a separate CI gate, which v0 does not have.
+
+## Try the slice
+
+Needs Go and git. Run inside a git repository with a commit on `HEAD`; the diff base is `origin/HEAD`, `main` or `master`, or `--base`.
+
+```sh
+make build                              # bin/plait
+plait run new order-retry --key PROJ-7
+plait ctx save < task.md                # task and acceptance criteria; missing criteria are marked as a gap
+plait review export                     # snapshot under refs/plait, package in .plait/runs/<id>/review-<n>/package.md
+# open a fresh agent session, give it package.md, save its JSON answer
+plait review import answer.json         # checked against review-findings/v1 and bound to the snapshot
+plait review report                     # findings by severity, coverage label, stale mark
+plait next --json                       # what to do next, at any step
+```
+
+Outside a TTY or with `--json` every command answers with JSON; exit codes are 0 ok, 2 invalid input, 3 forbidden by policy, 4 needs a human.
 
 ## Design goals
 
