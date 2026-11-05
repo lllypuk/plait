@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
@@ -112,6 +113,65 @@ func Plan(d agent.Descriptor, scope Scope, env Env, version string, uninstall bo
 		return nil, err
 	}
 	return append(ops, pops...), nil
+}
+
+// PlanAll returns Plan of every agent with one operation per file.
+func PlanAll(agents []agent.Descriptor, scope Scope, env Env, version string, uninstall bool) ([]Op, error) {
+	agents, err := shareDeny(agents, scope, env)
+	if err != nil {
+		return nil, err
+	}
+	var ops []Op
+	for _, d := range agents {
+		aops, planErr := Plan(d, scope, env, version, uninstall)
+		if planErr != nil {
+			return nil, planErr
+		}
+		ops = append(ops, aops...)
+	}
+	return Unique(ops), nil
+}
+
+// shareDeny gives the first agent of each deny rule file the rules of all agents writing it: Unique keeps only its plan.
+func shareDeny(agents []agent.Descriptor, scope Scope, env Env) ([]agent.Descriptor, error) {
+	out := slices.Clone(agents)
+	owner := map[string]int{}
+	for i, d := range out {
+		if d.Permissions.Writer == agent.WriterNone {
+			continue
+		}
+		p := agent.Scopes{User: d.Permissions.User, Project: d.Permissions.Project}
+		path, err := env.Path(d.Name, scope, scopePath(p, scope))
+		if err != nil {
+			return nil, err
+		}
+		j, ok := owner[path]
+		if !ok {
+			owner[path] = i
+			continue
+		}
+		first := &out[j]
+		if first.Permissions.Writer != d.Permissions.Writer {
+			return nil, output.Invalid(
+				"config_invalid",
+				fmt.Sprintf("agents.%s and agents.%s write deny rules to %s with different writers %q and %q",
+					first.Name, d.Name, path, first.Permissions.Writer, d.Permissions.Writer),
+				fmt.Sprintf(
+					"give agents.%s the writer of agents.%s or its own permissions path, then rerun the command",
+					d.Name,
+					first.Name,
+				),
+			)
+		}
+		deny := slices.Clone(first.Permissions.Deny)
+		for _, c := range d.Permissions.Deny {
+			if !slices.Contains(deny, c) {
+				deny = append(deny, c)
+			}
+		}
+		first.Permissions.Deny = deny
+	}
+	return out, nil
 }
 
 // SkillPlan returns the skill operations Plan would make to install d in scope.

@@ -106,15 +106,14 @@ func (a *app) setup(cmd *cobra.Command, f setupFlags) (setupData, error) {
 		Ops:       []install.Op{},
 		Checks:    []doctor.Check{},
 	}
+	ds := make([]agent.Descriptor, 0, len(agents))
 	for _, sa := range agents {
 		d, _ := reg.Get(sa.Name)
-		ops, planErr := install.Plan(d, scope, env, a.opts.Version, f.uninstall)
-		if planErr != nil {
-			return setupData{}, planErr
-		}
-		data.Ops = append(data.Ops, ops...)
+		ds = append(ds, d)
 	}
-	data.Ops = install.Unique(data.Ops)
+	if data.Ops, err = install.PlanAll(ds, scope, env, a.opts.Version, f.uninstall); err != nil {
+		return setupData{}, err
+	}
 	data.Agents = agents
 	if f.dryRun {
 		return data, nil

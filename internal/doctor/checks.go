@@ -181,6 +181,13 @@ func telemetryCheck(env Env, d agent.Descriptor) Check {
 		if c.JSON == nil {
 			continue
 		}
+		if val, set := lookupEnv(env.Sources.Environ, c.JSON.Env); c.JSON.Env != "" && set {
+			if val != "true" && val != "1" {
+				return Check{Name: name, Status: StatusOK, Detail: "off: " + c.JSON.Env + "=" + val}
+			}
+			ways = append(ways, c.JSON.Env+"=false in the environment")
+			continue
+		}
 		path, held := jsonHolds(env, d, *c.JSON)
 		if held {
 			return Check{Name: name, Status: StatusOK, Detail: fmt.Sprintf("off: %s in %s", c.JSON.Path, path)}

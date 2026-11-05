@@ -169,11 +169,17 @@ func rank(s Status) int { return slices.Index([]Status{StatusOK, StatusWarn, Sta
 
 // lookup returns the last value of key in environ, as the process environment does.
 func lookup(environ []string, key string) string {
-	v := ""
+	v, _ := lookupEnv(environ, key)
+	return v
+}
+
+// lookupEnv tells an empty variable from an unset one; the last assignment wins.
+func lookupEnv(environ []string, key string) (string, bool) {
+	v, set := "", false
 	for _, kv := range environ {
 		if k, val, ok := strings.Cut(kv, "="); ok && k == key {
-			v = val
+			v, set = val, true
 		}
 	}
-	return v
+	return v, set
 }

@@ -33,7 +33,7 @@ network:
 | | Claude Code | Qwen Code |
 | --- | --- | --- |
 | endpoint модели | `ANTHROPIC_BASE_URL` | `OPENAI_BASE_URL` |
-| телеметрия выключена | `DISABLE_TELEMETRY=1` или `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` в env или в `env` из `~/.claude/settings.json` | `"privacy": {"usageStatisticsEnabled": false}` в `~/.qwen/settings.json` |
+| телеметрия выключена | `DISABLE_TELEMETRY=1` или `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` в env или в `env` из `~/.claude/settings.json` | `"privacy": {"usageStatisticsEnabled": false}` в `~/.qwen/settings.json`; `QWEN_USAGE_STATISTICS_ENABLED` в env важнее файла |
 
 Обёртка или форк агента описывается в `~/.config/plait/config.yaml` наследованием, без правки кода:
 

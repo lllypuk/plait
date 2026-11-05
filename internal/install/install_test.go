@@ -2,6 +2,7 @@ package install_test
 
 import (
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -26,6 +27,19 @@ func registry(t *testing.T) *agent.Registry {
 		t.Fatal(err)
 	}
 	return r
+}
+
+// derive loads agent name based on the first built-in agent with fields overridden.
+func derive(t *testing.T, name string, fields map[string]any) agent.Descriptor {
+	t.Helper()
+	def := map[string]any{"base": registry(t).All()[0].Name, "cmd": name}
+	maps.Copy(def, fields)
+	r, err := agent.Load(map[string]map[string]any{name: def})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, _ := r.Get(name)
+	return d
 }
 
 func plan(t *testing.T, d agent.Descriptor, env install.Env, version string, uninstall bool) []install.Op {
@@ -290,5 +304,39 @@ func TestUnique(t *testing.T) {
 	got := install.Unique(ops)
 	if len(got) != 4 || got[0].Agent != base || got[1].Item != install.ItemPermissions {
 		t.Fatalf("Unique = %+v", got)
+	}
+}
+
+// TestPlanAllSharedDeny writes the rules of a derived agent into the file it shares with its base.
+func TestPlanAllSharedDeny(t *testing.T) {
+	base := registry(t).All()[0]
+	derived := derive(t, "derived", map[string]any{"permissions": map[string]any{"deny": []any{"plait mr"}}})
+	env := install.Env{Home: t.TempDir()}
+	both := []agent.Descriptor{base, derived}
+	ops, err := install.PlanAll(both, install.ScopeUser, env, v1, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	apply(t, ops)
+	for _, d := range both {
+		for _, op := range plan(t, d, env, v1, false) {
+			if op.Item == install.ItemPermissions && op.Changes() {
+				t.Errorf("%s: rules missing after PlanAll: %s %s", d.Name, op.Action, op.Detail)
+			}
+		}
+	}
+	if base.Permissions.Deny[len(base.Permissions.Deny)-1] == "plait mr" {
+		t.Error("PlanAll changed the descriptor of the base")
+	}
+}
+
+func TestPlanAllWriterMismatch(t *testing.T) {
+	agents := []agent.Descriptor{
+		registry(t).All()[0],
+		derive(t, "other", map[string]any{"permissions": map[string]any{"writer": agent.WriterQwenSettings}}),
+	}
+	_, err := install.PlanAll(agents, install.ScopeUser, install.Env{Home: t.TempDir()}, v1, false)
+	if e := output.AsError(err); e == nil || e.Code != "config_invalid" || e.ExitCode() != output.ExitInvalid {
+		t.Fatalf("err = %v, want config_invalid", err)
 	}
 }

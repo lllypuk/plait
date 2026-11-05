@@ -10,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lllypuk/plait/internal/agent"
 	"github.com/lllypuk/plait/internal/config"
 	"github.com/lllypuk/plait/internal/install"
 	"github.com/lllypuk/plait/internal/output"
@@ -112,7 +111,7 @@ func TestRepoPlanRepeat(t *testing.T) {
 func TestRepoPlanKeepsForeignText(t *testing.T) {
 	root := t.TempDir()
 	agents := "# Team\n\nRun make check.\n"
-	ignore := "*.log\n/.plait/*" // last line without a newline
+	ignore := "*.log\n.plait/" // last line without a newline
 	writeRepoFile(t, root, install.AgentsFile, agents)
 	writeRepoFile(t, root, ".gitignore", ignore)
 	claude := registry(t).All()[0].ContextFile
@@ -126,12 +125,49 @@ func TestRepoPlanKeepsForeignText(t *testing.T) {
 	if !strings.HasPrefix(got, agents+"\n<!-- plait:begin -->\n") || !strings.HasSuffix(got, "<!-- plait:end -->\n") {
 		t.Errorf("AGENTS.md =\n%s", got)
 	}
-	if got = readRepoFile(t, root, ".gitignore"); got != ignore+"\n!/.plait/config.yaml\n!/.plait/rules.md\n" {
+	wantIgnore := ignore + "\n!/.plait/\n/.plait/*\n!/.plait/config.yaml\n!/.plait/rules.md\n"
+	if got = readRepoFile(t, root, ".gitignore"); got != wantIgnore {
 		t.Errorf(".gitignore = %q", got)
 	}
 	// An import inside a sentence does not count: the agent imports only a line of its own.
 	if got = readRepoFile(t, root, claude); got != "See @AGENTS.md for rules.\n\n@AGENTS.md\n" {
 		t.Errorf("%s = %q", claude, got)
+	}
+}
+
+func TestRepoPlanIgnoreOrder(t *testing.T) {
+	block := "!/.plait/\n/.plait/*\n!/.plait/config.yaml\n!/.plait/rules.md\n"
+	for name, tc := range map[string]struct{ ignore, want string }{
+		"override before foreign rule": {
+			ignore: "!/.plait/\n.plait/\n",
+			want:   "!/.plait/\n.plait/\n" + block,
+		},
+		"whole block before foreign rule": {
+			ignore: block + ".plait/\n",
+			want:   block + ".plait/\n" + block,
+		},
+		"missing line appended": {
+			ignore: "!/.plait/\n/.plait/*\n!/.plait/config.yaml\n",
+			want:   block,
+		},
+		"foreign rule before block": {
+			ignore: ".plait/\n" + block,
+			want:   ".plait/\n" + block,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			writeRepoFile(t, root, ".gitignore", tc.ignore)
+			initRepo(t, root)
+			if got := readRepoFile(t, root, ".gitignore"); got != tc.want {
+				t.Errorf(".gitignore = %q, want %q", got, tc.want)
+			}
+			for _, op := range initRepo(t, root) {
+				if op.Item == install.ItemGitignore && op.Changes() {
+					t.Errorf("repeat: %s %s", op.Action, op.Path)
+				}
+			}
+		})
 	}
 }
 
@@ -223,11 +259,8 @@ func TestConfigTemplateKeepsDefaults(t *testing.T) {
 
 // TestRepoPlanSharedPaths keeps one operation per file when a derived agent shares paths with its base.
 func TestRepoPlanSharedPaths(t *testing.T) {
-	reg, err := agent.Load(map[string]map[string]any{"derived": {"base": registry(t).All()[0].Name, "cmd": "derived"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	ops, err := install.RepoPlan(reg.All(), install.Env{Root: t.TempDir()}, v1)
+	agents := append(registry(t).All(), derive(t, "derived", nil))
+	ops, err := install.RepoPlan(agents, install.Env{Root: t.TempDir()}, v1)
 	if err != nil {
 		t.Fatal(err)
 	}

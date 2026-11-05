@@ -32,6 +32,7 @@ const (
 	skillsClaude    = "skills claude"
 	denyClaude      = "deny rules claude"
 	telemetryClaude = "telemetry claude"
+	telemetryQwen   = "telemetry qwen"
 	proxyCheck      = "proxy"
 	configCheck     = "config"
 	ignoreCheck     = ".gitignore"
@@ -311,7 +312,7 @@ func TestChecks(t *testing.T) { //nolint:funlen // one table for every check
 				f.agent("qwen", "0.9.1")
 				f.write(filepath.Join(f.home, ".qwen/settings.json"), `{"privacy": {"usageStatisticsEnabled": false}}`)
 			},
-			check: "telemetry qwen", status: doctor.StatusOK, detail: `^off: privacy\.usageStatisticsEnabled in `,
+			check: telemetryQwen, status: doctor.StatusOK, detail: `^off: privacy\.usageStatisticsEnabled in `,
 		},
 		{
 			name: "telemetry on by equals",
@@ -319,9 +320,47 @@ func TestChecks(t *testing.T) { //nolint:funlen // one table for every check
 				f.agent("qwen", "0.9.1")
 				f.write(filepath.Join(f.home, ".qwen/settings.json"), `{"privacy": {"usageStatisticsEnabled": true}}`)
 			},
-			check:  "telemetry qwen",
+			check:  telemetryQwen,
 			status: doctor.StatusWarn,
 			fix:    `privacy\.usageStatisticsEnabled: false in ~/\.qwen/`,
+		},
+		{
+			name: "telemetry on by env over settings",
+			prep: func(f *fixture) {
+				f.agent("qwen", "0.9.1")
+				f.write(filepath.Join(f.home, ".qwen/settings.json"), `{"privacy": {"usageStatisticsEnabled": false}}`)
+				f.environ = []string{"QWEN_USAGE_STATISTICS_ENABLED=true"}
+			},
+			check:  telemetryQwen,
+			status: doctor.StatusWarn,
+			fix:    `QWEN_USAGE_STATISTICS_ENABLED=false in the environment`,
+		},
+		{
+			name: "telemetry off by env over settings",
+			prep: func(f *fixture) {
+				f.agent("qwen", "0.9.1")
+				f.write(filepath.Join(f.home, ".qwen/settings.json"), `{"privacy": {"usageStatisticsEnabled": true}}`)
+				f.environ = []string{"QWEN_USAGE_STATISTICS_ENABLED=0"}
+			},
+			check: telemetryQwen, status: doctor.StatusOK, detail: `^off: QWEN_USAGE_STATISTICS_ENABLED=0$`,
+		},
+		{
+			name: "telemetry off by env Qwen does not parse as true",
+			prep: func(f *fixture) {
+				f.agent("qwen", "0.9.1")
+				f.write(filepath.Join(f.home, ".qwen/settings.json"), `{"privacy": {"usageStatisticsEnabled": true}}`)
+				f.environ = []string{"QWEN_USAGE_STATISTICS_ENABLED=TRUE"}
+			},
+			check: telemetryQwen, status: doctor.StatusOK, detail: `^off: QWEN_USAGE_STATISTICS_ENABLED=TRUE$`,
+		},
+		{
+			name: "telemetry off by empty env",
+			prep: func(f *fixture) {
+				f.agent("qwen", "0.9.1")
+				f.write(filepath.Join(f.home, ".qwen/settings.json"), `{"privacy": {"usageStatisticsEnabled": true}}`)
+				f.environ = []string{"QWEN_USAGE_STATISTICS_ENABLED="}
+			},
+			check: telemetryQwen, status: doctor.StatusOK, detail: `^off: QWEN_USAGE_STATISTICS_ENABLED=$`,
 		},
 		{
 			name: "telemetry signs unknown",

@@ -55,10 +55,12 @@ type Condition struct {
 }
 
 // JSONCondition checks the value at a dotted Path of File; a nil Equals accepts any truthy value.
+// A set Env overrides the file: the condition then holds unless its value is exactly true or 1, as Qwen Code parses it.
 type JSONCondition struct {
 	File   string `json:"file"`
 	Path   string `json:"path"`
 	Equals any    `json:"equals,omitempty"`
+	Env    string `json:"env,omitempty"`
 }
 
 // Detection is what Detect found; an agent missing from PATH is not installed, not an error.

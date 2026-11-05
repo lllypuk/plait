@@ -47,7 +47,8 @@
             "properties": {
               "file": {"type": "string", "minLength": 1},
               "path": {"type": "string", "minLength": 1},
-              "equals": {}
+              "equals": {},
+              "env": {"description": "Variable that overrides the file when set: the condition holds unless its value is exactly true or 1.", "type": "string", "minLength": 1}
             }
           }
         }

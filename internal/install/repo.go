@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"text/template"
 
@@ -36,8 +37,11 @@ const (
 	importLine   = "@" + AgentsFile
 )
 
-// ignoreLines hide runs but keep the files the team commits; git cannot re-include them under an ignored directory.
-func ignoreLines() []string { return []string{"/.plait/*", "!/" + ConfigFile, "!/.plait/rules.md"} }
+// ignoreLines hide runs but keep the files the team commits; git cannot re-include them under an ignored directory,
+// so the first line undoes an existing .plait/ rule.
+func ignoreLines() []string {
+	return []string{"!/.plait/", "/.plait/*", "!/" + ConfigFile, "!/.plait/rules.md"}
+}
 
 var (
 	//go:embed templates/*.tmpl
@@ -53,14 +57,11 @@ func RepoPlan(agents []agent.Descriptor, env Env, version string) ([]Op, error) 
 	if err != nil {
 		return nil, err
 	}
-	ops := []Op{cfg}
-	for _, d := range agents {
-		aops, planErr := Plan(d, ScopeProject, env, version, false)
-		if planErr != nil {
-			return nil, planErr
-		}
-		ops = append(ops, aops...)
+	aops, err := PlanAll(agents, ScopeProject, env, version, false)
+	if err != nil {
+		return nil, err
 	}
+	ops := append([]Op{cfg}, aops...)
 	section, err := sectionOp(filepath.Join(env.Root, AgentsFile))
 	if err != nil {
 		return nil, err
@@ -203,31 +204,70 @@ func ignoreOp(path string) (Op, error) {
 	if err != nil {
 		return Op{}, err
 	}
-	var missing []string
-	for _, l := range ignoreLines() {
-		if !hasLine(old, l) {
-			missing = append(missing, l)
-		}
-	}
-	if len(missing) == 0 {
+	if ignoreEffective(old) {
 		return Op{Action: ActionSkip, Path: path, Item: ItemGitignore}, nil
 	}
+	var add []string
+	for _, l := range ignoreLines() {
+		if !hasLine(old, l) {
+			add = append(add, l)
+		}
+	}
+	content := appendLines(old, add)
+	if !ignoreEffective(content) {
+		add = ignoreLines()
+		content = appendLines(old, add)
+	}
 	op := Op{
-		Action: ActionUpdate,
-		Path:   path,
-		Item:   ItemGitignore,
-		Detail: "add " + strings.Join(missing, ", "),
-		mode:   mode,
+		Action:  ActionUpdate,
+		Path:    path,
+		Item:    ItemGitignore,
+		Detail:  "add " + strings.Join(add, ", "),
+		content: content,
+		mode:    mode,
 	}
 	if old == nil {
 		op.Action = ActionCreate
 	}
-	op.content = old
-	if len(old) > 0 && !bytes.HasSuffix(old, []byte("\n")) {
-		op.content = append(op.content, '\n')
-	}
-	op.content = append(op.content, strings.Join(missing, "\n")+"\n"...)
 	return op, nil
+}
+
+// ignoreEffective reports whether the last occurrences of ignoreLines go in order
+// and no later rule ignores .plait again; rules such as * are not recognised.
+func ignoreEffective(b []byte) bool {
+	want := ignoreLines()
+	last := make([]int, len(want))
+	for i := range last {
+		last[i] = -1
+	}
+	var lines []string
+	for l := range strings.Lines(string(b)) {
+		l = strings.TrimSpace(l)
+		if i := slices.Index(want, l); i >= 0 {
+			last[i] = len(lines)
+		}
+		lines = append(lines, l)
+	}
+	for i, n := range last {
+		if n < 0 || i > 0 && n <= last[i-1] {
+			return false
+		}
+	}
+	for _, l := range lines[last[0]+1:] {
+		if strings.Contains(l, ".plait") && !strings.HasPrefix(l, "!") && !strings.HasPrefix(l, "#") &&
+			!slices.Contains(want, l) {
+			return false
+		}
+	}
+	return true
+}
+
+func appendLines(old []byte, lines []string) []byte {
+	b := slices.Clone(old)
+	if len(b) > 0 && !bytes.HasSuffix(b, []byte("\n")) {
+		b = append(b, '\n')
+	}
+	return append(b, strings.Join(lines, "\n")+"\n"...)
 }
 
 func hasLine(b []byte, line string) bool {

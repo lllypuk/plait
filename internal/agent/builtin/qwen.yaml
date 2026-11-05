@@ -11,5 +11,9 @@ permissions:
   deny: [plait approve, plait reject]
   source: https://qwenlm.github.io/qwen-code-docs/en/users/configuration/settings/
 telemetry_off:
-  - json: { file: ~/.qwen/settings.json, path: privacy.usageStatisticsEnabled, equals: false }
+  - json:
+      file: ~/.qwen/settings.json
+      path: privacy.usageStatisticsEnabled
+      equals: false
+      env: QWEN_USAGE_STATISTICS_ENABLED
 model_endpoint_env: OPENAI_BASE_URL
