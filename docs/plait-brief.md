@@ -178,6 +178,8 @@ flowchart LR
 
 Пути взяты из таблицы [vercel-labs/skills](https://github.com/vercel-labs/skills/wiki) и [документации Gemini CLI](https://geminicli.com/docs/cli/creating-skills/). Адаптер установки проверяет их на каждой версии агента.
 
+**Агент — дескриптор, а не код.** Команда, пути skills, контекст-файл, формат запрета команд, признаки выключенной телеметрии и переменная endpoint'а модели описываются данными: встроенные дескрипторы вшиты в бинарь, свои задаются в конфиге `agents.<name>` тем же набором полей. Код нужен только для форматов файлов настроек и (с этапа 2) разбора вывода headless-запуска; новый агент с известным форматом добавляется одним YAML без сборки.
+
 **Производные агенты.** В организации могут использоваться форки агентов или обёртки, которые запускают агента в песочнице. Их описывают в system-конфиге `/etc/plait/config.yaml`; апстрим про них не знает и даёт механизм наследования адаптеров:
 
 ```yaml
@@ -242,8 +244,8 @@ internal/
   config/     # yaml.v3, слои по очереди в одну структуру: embed defaults → /etc/plait → ~/.config/plait → .plait/config.yaml → env → flags
   pipeline/   # state machine, Stage, Gate, Run, policy (autonomy), state.json
   artifact/   # шаблоны и валидаторы plan/review/analysis, JSON Schema
-  agent/      # интерфейс Agent + registry
-    claude/ codex/ gemini/ qwen/ pi/ generic/ acp/
+  agent/      # интерфейс Agent, реестр дескрипторов, писатели форматов настроек
+    builtin/  # дескрипторы claude, codex, gemini, qwen, pi (YAML, go:embed)
   install/    # установка skills и permission-правил по агентам
   skills/     # embed.FS: SKILL.md + guide-тексты стадий
   prompt/     # text/template, embed + overlay (.plait/prompts, ~/.config/plait/prompts)
