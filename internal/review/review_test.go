@@ -138,7 +138,7 @@ func TestExport(t *testing.T) {
 	wantInvalid(t, err, "no_task")
 
 	if _, err = task.Save(s, task.Input{Text: []byte("# Retry\n\n## Acceptance criteria\n\n- 3 times\n"),
-		Source: "local"}); err != nil {
+		Source: task.DefaultSource}); err != nil {
 		t.Fatal(err)
 	}
 	first, err := review.Export(t.Context(), s, repo, cfg)
@@ -198,7 +198,7 @@ func TestExportNewTaskSameTree(t *testing.T) {
 	}
 	save := func(text string) {
 		t.Helper()
-		if _, err := task.Save(s, task.Input{Text: []byte(text), Source: "local"}); err != nil {
+		if _, err := task.Save(s, task.Input{Text: []byte(text), Source: task.DefaultSource}); err != nil {
 			t.Fatal(err)
 		}
 	}

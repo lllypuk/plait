@@ -74,7 +74,7 @@ func (a *app) readTask(file string) ([]byte, error) {
 		return nil, output.Invalid("no_task_input", "no task Markdown on stdin",
 			"pipe it: plait ctx save < task.md, or pass --file task.md")
 	}
-	return readLimited(a.opts.Stdin)
+	return readLimited(a.opts.Stdin, maxTaskSize, errTaskTooLarge)
 }
 
 func (a *app) readTaskFile(file string) ([]byte, error) {
@@ -90,17 +90,22 @@ func (a *app) readTaskFile(file string) ([]byte, error) {
 		return nil, output.Internal(fmt.Errorf("open %s: %w", file, err))
 	}
 	defer func() { _ = f.Close() }()
-	return readLimited(f)
+	return readLimited(f, maxTaskSize, errTaskTooLarge)
 }
 
-func readLimited(r io.Reader) ([]byte, error) {
-	b, err := io.ReadAll(io.LimitReader(r, maxTaskSize+1))
+const verbUnchanged = "unchanged"
+
+var errTaskTooLarge = output.Invalid(
+	"task_too_large", fmt.Sprintf("the task is over %d bytes", maxTaskSize),
+	"save only the summary, description and acceptance criteria: plait ctx save < task.md")
+
+func readLimited(r io.Reader, limit int, tooLarge *output.Error) ([]byte, error) {
+	b, err := io.ReadAll(io.LimitReader(r, int64(limit)+1))
 	if err != nil {
-		return nil, output.Internal(fmt.Errorf("read task: %w", err))
+		return nil, output.Internal(fmt.Errorf("read input: %w", err))
 	}
-	if len(b) > maxTaskSize {
-		return nil, output.Invalid("task_too_large", fmt.Sprintf("the task is over %d bytes", maxTaskSize),
-			"save only the summary, description and acceptance criteria: plait ctx save < task.md")
+	if len(b) > limit {
+		return nil, tooLarge
 	}
 	return b, nil
 }
@@ -113,7 +118,7 @@ func isTTY(r io.Reader) bool {
 func ctxSaveText(res task.Result) string {
 	verb := "saved"
 	if !res.Changed {
-		verb = "unchanged"
+		verb = verbUnchanged
 	}
 	criteria := "acceptance criteria present"
 	if !res.HasCriteria {

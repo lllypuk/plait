@@ -222,7 +222,7 @@ func writePackage(path string, md []byte) error {
 }
 
 func coverage(t *run.Task) string {
-	if t.HasCriteria {
+	if t != nil && t.HasCriteria {
 		return CoverageCriteria
 	}
 	return CoverageDiffOnly

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"testing"
 
@@ -18,8 +19,12 @@ func TestMain(m *testing.M) {
 
 func TestScript(t *testing.T) {
 	testscript.Run(t, testscript.Params{
-		Dir:  "testdata/script",
-		Cmds: map[string]func(*testscript.TestScript, bool, []string){"exitcode": exitCode},
+		Dir: "testdata/script",
+		Cmds: map[string]func(*testscript.TestScript, bool, []string){
+			"exitcode": exitCode,
+			"capture":  capture,
+			"expand":   expand,
+		},
 	})
 }
 
@@ -44,4 +49,26 @@ func exitCode(ts *testscript.TestScript, neg bool, args []string) {
 	if got != want {
 		ts.Fatalf("exit code = %d, want %d", got, want)
 	}
+}
+
+// capture runs `capture VAR REGEXP` and sets VAR to the first group of REGEXP in the last stdout.
+func capture(ts *testscript.TestScript, neg bool, args []string) {
+	if neg || len(args) != 2 {
+		ts.Fatalf("usage: capture VAR REGEXP")
+	}
+	re, err := regexp.Compile(args[1])
+	ts.Check(err)
+	m := re.FindStringSubmatch(ts.ReadFile("stdout"))
+	if len(m) < 2 {
+		ts.Fatalf("stdout has no group of %q", args[1])
+	}
+	ts.Setenv(args[0], m[1])
+}
+
+// expand runs `expand SRC DST` and writes SRC to DST with $VAR replaced from the script environment.
+func expand(ts *testscript.TestScript, neg bool, args []string) {
+	if neg || len(args) != 2 {
+		ts.Fatalf("usage: expand SRC DST")
+	}
+	ts.Check(os.WriteFile(ts.MkAbs(args[1]), []byte(os.Expand(ts.ReadFile(args[0]), ts.Getenv)), 0o600))
 }

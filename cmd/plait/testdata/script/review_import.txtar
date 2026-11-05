@@ -1,0 +1,76 @@
+env GIT_CONFIG_NOSYSTEM=1
+env GIT_AUTHOR_NAME=dev GIT_AUTHOR_EMAIL=dev@example.com GIT_COMMITTER_NAME=dev GIT_COMMITTER_EMAIL=dev@example.com
+mkdir repo
+cd repo
+exec git init -q -b main
+cp ../a.txt a.txt
+exec git add -A
+exec git commit -q -m init
+exec git checkout -q -b feature
+exec plait run new order-retry
+stdin ../task.md
+exec plait ctx save --json
+
+# import needs an exported package
+exitcode 2 plait review import ../other.json --json
+stdout '"code":"not_exported"'
+
+cp ../a2.txt a.txt
+exec git add a.txt
+exec git diff --cached --name-only
+cp stdout ../cached-before
+exec plait review export --json
+capture SNAPSHOT '"commit":"([0-9a-f]{40})"'
+expand ../answer.json ../answer-ok.json
+expand ../bad.json ../bad-ok.json
+
+# a missing file, a schema violation and another snapshot are invalid with a fix
+exitcode 2 plait review import nope.json --json
+stdout '"code":"answer_not_found"'
+exitcode 2 plait review import ../bad-ok.json --json
+stdout '"code":"schema_violation".*at /findings/0/severity'
+stdout '"fix":"fix /findings/0/severity'
+exitcode 2 plait review import ../other.json --json
+stdout '"code":"snapshot_mismatch"'
+exitcode 2 plait review import - --json
+stdout '"code":"no_answer_input"'
+
+exec plait review import ../answer-ok.json --json
+stdout '"snapshot":1,.*"findings":1,"review":"\.plait/runs/[0-9-]+-order-retry/review-1.json","stale":false,"changed":true,"step":"imported"'
+exec git diff --cached --name-only
+cmp stdout ../cached-before
+exec plait next --json
+stdout '"step":"imported"'
+
+# the same answer again changes nothing, also from stdin
+stdin ../answer-ok.json
+exec plait review import - --json
+stdout '"changed":false'
+
+# a change after the snapshot still imports, marked stale
+cp ../a.txt a.txt
+exec plait review import ../answer-ok.json
+stdout '"stale":true,"changed":false'
+
+-- a.txt --
+a
+-- a2.txt --
+a changed
+-- task.md --
+# Retry failed orders
+
+## Acceptance criteria
+
+- retried 3 times
+-- answer.json --
+{
+  "snapshot": "$SNAPSHOT",
+  "coverage": "criteria",
+  "findings": [
+    {"id": "F1", "severity": "major", "file": "a.txt", "line": 1, "title": "no retry", "rationale": "the order is not retried"}
+  ]
+}
+-- bad.json --
+{"snapshot": "$SNAPSHOT", "coverage": "criteria", "findings": [{"id": "F1", "severity": "high", "file": "a.txt", "line": 1, "title": "t", "rationale": "r"}]}
+-- other.json --
+{"snapshot": "0000000000000000000000000000000000000000", "coverage": "criteria", "findings": []}
