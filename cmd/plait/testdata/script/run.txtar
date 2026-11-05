@@ -1,0 +1,35 @@
+# no runs yet
+exec plait run list --json
+stdout '^\{"ok":true,"data":\{"runs":\[\]\}\}$'
+
+# run new creates a dated run and makes it current
+exec plait run new order-retry
+stdout '"run":"[0-9]{4}-[0-9]{2}-[0-9]{2}-order-retry","step":"new","dir":".plait/runs/[0-9-]+order-retry","created":true'
+exists .plait/current
+
+# repeating it returns the same run
+exec plait run new order-retry
+stdout '"created":false'
+
+# --key names the run after the task and switches to it
+exec plait run new retry --key PROJ-1
+stdout '"run":"PROJ-1-retry"'
+exists .plait/runs/PROJ-1-retry/state.json
+
+exec plait run list --json
+stdout '"id":"PROJ-1-retry","step":"new","created_at":"[^"]+","current":true'
+stdout '"id":"[0-9-]+order-retry","step":"new","created_at":"[^"]+","current":false'
+
+# resume switches back by id
+exec plait run new order-retry
+exec plait run resume PROJ-1-retry
+stdout '"run":"PROJ-1-retry","step":"new","dir":".plait/runs/PROJ-1-retry","created":false'
+exec plait run list --json
+stdout '"id":"PROJ-1-retry","step":"new","created_at":"[^"]+","current":true'
+
+# unknown run and bad slug are invalid input with a fix
+exitcode 2 plait run resume nope
+stdout '"code":"run_not_found"'
+stdout '"fix":"see existing runs with plait run list'
+exitcode 2 plait run new Bad_Slug
+stdout '"code":"invalid_slug"'

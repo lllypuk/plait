@@ -15,8 +15,10 @@ const devVersion = "dev"
 
 // Options are the process inputs of one plait invocation.
 type Options struct {
-	Version    string
-	Args       []string
+	Version string
+	Args    []string
+	// Dir is the working directory; empty means the process one.
+	Dir        string
 	Stdout     io.Writer
 	Stderr     io.Writer
 	IsTerminal func(io.Writer) bool
@@ -62,7 +64,7 @@ func (a *app) newRoot() *cobra.Command {
 		PersistentPreRun: func(*cobra.Command, []string) { a.started = true },
 	}
 	root.PersistentFlags().BoolVar(&a.json, "json", false, "print the JSON envelope even on a terminal")
-	root.AddCommand(a.newVersionCmd())
+	root.AddCommand(a.newVersionCmd(), a.newRunCmd())
 	return root
 }
 
