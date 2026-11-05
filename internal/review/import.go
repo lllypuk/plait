@@ -45,6 +45,16 @@ type Answer struct {
 	Snapshot string    `json:"snapshot"`
 	Coverage string    `json:"coverage"`
 	Findings []Finding `json:"findings"`
+	Previous []Verdict `json:"previous,omitempty"`
+	// UncheckedCriteria are quoted acceptance criteria the reviewer could not check from the diff.
+	UncheckedCriteria []string `json:"unchecked_criteria,omitempty"`
+}
+
+// Verdict is the reviewer's verdict on a finding of an earlier review.
+type Verdict struct {
+	Key     string `json:"key"`
+	Verdict string `json:"verdict"`
+	Note    string `json:"note,omitempty"`
 }
 
 // Finding is one defect the reviewer reported.
@@ -105,6 +115,16 @@ func ParseAnswer(data []byte, name string) (Answer, error) {
 		}
 		seen[f.ID] = true
 	}
+	keys := map[string]bool{}
+	for i, v := range a.Previous {
+		if keys[v.Key] {
+			at := "/previous/" + strconv.Itoa(i) + "/key"
+			return Answer{}, output.Invalid("schema_violation",
+				fmt.Sprintf("the answer does not match %s: at %s: duplicate key %q", run.FindingsSchema, at, v.Key),
+				"give one verdict per previous finding: fix "+at+", "+retry)
+		}
+		keys[v.Key] = true
+	}
 	return a, nil
 }
 
@@ -141,6 +161,9 @@ func Import(ctx context.Context, s *run.Store, repo vcs.Repo, data []byte, name 
 		return ImportResult{}, output.Invalid("coverage_mismatch",
 			fmt.Sprintf("the answer claims coverage %s, but package %s asks for %s", a.Coverage, pkg, want),
 			"set coverage to "+want+" as package.md says, then call plait review import "+name+" again")
+	}
+	if a.Previous, err = bindVerdicts(a.Previous, snap.Previous, pkg, name); err != nil {
+		return ImportResult{}, err
 	}
 	tree, err := repo.CurrentTree(ctx)
 	if err != nil {
@@ -184,6 +207,9 @@ func saveAnswer(s *run.Store, st *run.State, snap run.Snapshot, a Answer, path s
 		return false, output.Internal(err)
 	}
 	rec := run.Review{N: snap.N, Snapshot: snap.Commit, ImportedAt: s.Now().UTC(), Coverage: a.Coverage}
+	if len(a.UncheckedCriteria) > 0 {
+		rec.CoverageGaps = []run.Gap{{Code: GapCriteriaUnchecked, Items: a.UncheckedCriteria}}
+	}
 	if i >= 0 {
 		st.Reviews[i] = rec
 	} else {

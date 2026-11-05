@@ -1,0 +1,152 @@
+# Review package: run 2026-11-05-order-retry, snapshot 2
+
+You are the reviewer in a fresh session. You did not write this change and you do not know why the author made it: judge only the task, the repository rules and the diff below. Do not edit files and do not run commands that change the repository.
+
+- Snapshot: `0123456789abcdef0123456789abcdef01234567`
+- Base: `89abcdef0123456789abcdef0123456789abcdef`
+- Coverage: `criteria`
+
+Check that the diff meets every acceptance criterion of the task, then look for defects and violations of the repository rules. A finding that breaks a criterion quotes it in `criterion`. A criterion you cannot check from the diff goes, quoted, to `unchecked_criteria`.
+
+## Task
+
+```markdown
+# Retry failed orders
+
+## Acceptance criteria
+
+- retried 3 times
+```
+
+## Repository rules
+
+No rule files in this repository.
+
+## Diff
+
+`git diff 89abcdef0123456789abcdef0123456789abcdef 0123456789abcdef0123456789abcdef01234567`
+
+```diff
+diff --git a/a.txt b/a.txt
+--- a/a.txt
++++ b/a.txt
+@@ -1 +1 @@
+-a
++a changed
+```
+
+## Checks
+
+No checks were saved for this snapshot.
+
+## Previous findings
+
+An earlier review of this run reported these findings and they are still open. You see the reviewer's wording, not the author's reasoning. Check each one against this snapshot and give it a verdict in `previous` by its key: `fixed` or `still_open` with a `note` on what you saw, `not_checked` when this snapshot does not let you tell. Do not repeat them in `findings`.
+
+### `R1-F1`, major
+
+In this snapshot: `a.txt:3`
+
+```text
+no retry
+
+orders fail once and stop
+
+Criterion: retried 3 times
+```
+
+### `R1-F2`, minor
+
+In this snapshot: `a.txt:1`, region changed
+
+```text
+magic number
+
+3 is inline
+```
+
+### `R1-F3`, nit
+
+In this snapshot: `b.txt`, whole file
+
+`````text
+typo
+
+```` in a comment
+`````
+
+### `R1-F4`, blocker
+
+In this snapshot: file deleted
+
+```text
+secret
+
+key committed
+```
+
+## Answer
+
+Answer with one JSON object and nothing else, valid against the schema `review-findings/v1` below. Set `snapshot` to `0123456789abcdef0123456789abcdef01234567` and `coverage` to `criteria`. Report each defect once with `file` and `line` in the snapshot; an empty `findings` list is a valid answer when there are none.
+
+Severity: `blocker` — must not be merged; `major` — wrong behaviour or a broken rule; `minor` — a real but small problem; `nit` — style or wording.
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/lllypuk/plait/schemas/review-findings.v1.json",
+  "title": "review-findings/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["snapshot", "coverage", "findings"],
+  "properties": {
+    "snapshot": {
+      "description": "Commit id of the reviewed snapshot, copied from the package.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$"
+    },
+    "coverage": {
+      "description": "criteria: checked against the task acceptance criteria; diff_only: the task has none, only the diff was checked.",
+      "enum": ["criteria", "diff_only"]
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "severity", "file", "line", "title", "rationale"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"},
+          "severity": {"enum": ["blocker", "major", "minor", "nit"]},
+          "file": {"description": "Path from the repository root.", "type": "string", "minLength": 1},
+          "line": {"description": "Line in the snapshot; 0 when the finding is about the whole file.", "type": "integer", "minimum": 0},
+          "title": {"type": "string", "minLength": 1},
+          "rationale": {"description": "Why it is a defect and what breaks.", "type": "string", "minLength": 1},
+          "criterion": {"description": "The acceptance criterion the finding violates, quoted from the task.", "type": "string", "minLength": 1}
+        }
+      }
+    },
+    "previous": {
+      "description": "One verdict per key under Previous findings in the package; a key left out counts as not_checked.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "verdict"],
+        "properties": {
+          "key": {"type": "string", "pattern": "^R[1-9][0-9]*-[A-Za-z0-9][A-Za-z0-9_.-]*$"},
+          "verdict": {"description": "fixed: the defect is gone from this snapshot; still_open: it is still there; not_checked: this snapshot does not let you tell.", "enum": ["fixed", "still_open", "not_checked"]},
+          "note": {"description": "What in this snapshot shows the verdict; required for fixed and still_open.", "type": "string", "minLength": 1}
+        },
+        "if": {"properties": {"verdict": {"enum": ["fixed", "still_open"]}}},
+        "then": {"required": ["note"]}
+      }
+    },
+    "unchecked_criteria": {
+      "description": "Acceptance criteria you could not check from the diff, quoted from the task.",
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    }
+  }
+}
+```

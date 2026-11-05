@@ -81,6 +81,27 @@ Severity: `blocker` — must not be merged; `major` — wrong behaviour or a bro
           "criterion": {"description": "The acceptance criterion the finding violates, quoted from the task.", "type": "string", "minLength": 1}
         }
       }
+    },
+    "previous": {
+      "description": "One verdict per key under Previous findings in the package; a key left out counts as not_checked.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "verdict"],
+        "properties": {
+          "key": {"type": "string", "pattern": "^R[1-9][0-9]*-[A-Za-z0-9][A-Za-z0-9_.-]*$"},
+          "verdict": {"description": "fixed: the defect is gone from this snapshot; still_open: it is still there; not_checked: this snapshot does not let you tell.", "enum": ["fixed", "still_open", "not_checked"]},
+          "note": {"description": "What in this snapshot shows the verdict; required for fixed and still_open.", "type": "string", "minLength": 1}
+        },
+        "if": {"properties": {"verdict": {"enum": ["fixed", "still_open"]}}},
+        "then": {"required": ["note"]}
+      }
+    },
+    "unchecked_criteria": {
+      "description": "Acceptance criteria you could not check from the diff, quoted from the task.",
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
     }
   }
 }

@@ -13,7 +13,7 @@ You are the reviewer in a fresh session. You did not write this change and you d
 {{- end}}
 {{- if eq .Coverage "criteria"}}
 
-Check that the diff meets every acceptance criterion of the task, then look for defects and violations of the repository rules. A finding that breaks a criterion quotes it in `criterion`.
+Check that the diff meets every acceptance criterion of the task, then look for defects and violations of the repository rules. A finding that breaks a criterion quotes it in `criterion`. A criterion you cannot check from the diff goes, quoted, to `unchecked_criteria`.
 {{- else}}
 
 The task has no acceptance criteria, so only the diff is checked: look for defects and violations of the repository rules. Do not invent criteria and do not set `criterion`.
@@ -65,6 +65,20 @@ The author ran these checks and saved their results; plait does not run them. A 
 {{- else}}
 
 No checks were saved for this snapshot.
+{{- end}}
+{{- if .Previous}}
+
+## Previous findings
+
+An earlier review of this run reported these findings and they are still open. You see the reviewer's wording, not the author's reasoning. Check each one against this snapshot and give it a verdict in `previous` by its key: `fixed` or `still_open` with a `note` on what you saw, `not_checked` when this snapshot does not let you tell. Do not repeat them in `findings`.
+{{- range .Previous}}
+
+### `{{.Key}}`, {{.Severity}}
+
+In this snapshot: {{.Where}}
+
+{{fence .Text "text"}}
+{{- end}}
 {{- end}}
 
 ## Answer

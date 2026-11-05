@@ -39,6 +39,9 @@ const (
 	checkLint     = "lint"
 	checkVet      = "vet"
 	checkBuild    = "build"
+	keyF1         = "R1-F1"
+	keyF2         = "R1-F2"
+	sevBlocker    = "blocker"
 	diffText      = "diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-a\n+a changed\n"
 )
 
@@ -48,7 +51,7 @@ type renderCase struct {
 }
 
 func TestRenderGolden(t *testing.T) {
-	for _, tc := range renderCases() {
+	for _, tc := range append(renderCases(), previousCase()) {
 		renderGolden(t, tc)
 	}
 }
@@ -129,6 +132,33 @@ func renderCases() []renderCase {
 					{Code: review.GapChecksFailed, Items: []string{checkLint}},
 					{Code: review.GapChecksStale, Items: []string{checkVet}},
 				},
+			},
+		},
+	}
+}
+
+// previousCase is the package of a second review.
+func previousCase() renderCase {
+	return renderCase{
+		"previous",
+		review.Package{
+			Run:      runID,
+			N:        2,
+			Commit:   commitID,
+			Base:     baseID,
+			Coverage: review.CoverageCriteria,
+			Task:     "# Retry failed orders\n\n## Acceptance criteria\n\n- retried 3 times\n",
+			Rules:    []review.Rule{},
+			Diff:     diffText,
+			Previous: []review.Previous{
+				{Key: keyF1, Severity: "major", Title: "no retry", Rationale: "orders fail once and stop",
+					Criterion: "retried 3 times", At: vcs.Location{File: "a.txt", Line: 3, State: vcs.LineUnchanged}},
+				{Key: keyF2, Severity: "minor", Title: "magic number", Rationale: "3 is inline",
+					At: vcs.Location{File: "a.txt", Line: 1, State: vcs.LineChanged}},
+				{Key: "R1-F3", Severity: "nit", Title: "typo", Rationale: "```` in a comment",
+					At: vcs.Location{File: "b.txt", State: vcs.LineUnchanged}},
+				{Key: "R1-F4", Severity: sevBlocker, Title: "secret", Rationale: "key committed",
+					At: vcs.Location{State: vcs.LineGone}},
 			},
 		},
 	}

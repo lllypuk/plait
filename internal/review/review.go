@@ -67,6 +67,7 @@ type Package struct {
 	MaxDiffBytes int
 	Checks       []Check
 	Gaps         []run.Gap
+	Previous     []Previous
 }
 
 // ExportResult describes what review export did.
@@ -167,6 +168,9 @@ func Export(ctx context.Context, s *run.Store, repo vcs.Repo, cfg config.Config)
 		return ExportResult{}, err
 	}
 	p.Run, p.Coverage, p.Task = st.ID, coverage(st.Task), string(taskMD)
+	if p.Previous, err = previousFindings(ctx, repo, st, runDir, snap.Tree); err != nil {
+		return ExportResult{}, err
+	}
 	if snap.Commit, err = commitPackage(ctx, repo, snap, p); err != nil {
 		return ExportResult{}, err
 	}
@@ -186,7 +190,7 @@ func Export(ctx context.Context, s *run.Store, repo vcs.Repo, cfg config.Config)
 		}
 		st.Snapshots = append(st.Snapshots, run.Snapshot{
 			N: n, Commit: snap.Commit, Tree: snap.Tree, Base: snap.Base, Head: snap.Head, CreatedAt: s.Now().UTC(),
-			CoverageGaps: p.Gaps,
+			CoverageGaps: p.Gaps, Previous: previousKeys(p.Previous),
 		})
 	}
 	if !reused || st.Step == run.StepTaskSaved {

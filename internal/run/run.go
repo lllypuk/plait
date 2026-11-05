@@ -73,6 +73,8 @@ type Snapshot struct {
 	Head         string    `json:"head"`
 	CreatedAt    time.Time `json:"created_at"`
 	CoverageGaps []Gap     `json:"coverage_gaps,omitempty"`
+	// Previous are the keys of earlier findings the package asks the reviewer to recheck.
+	Previous []string `json:"previous,omitempty"`
 }
 
 // Gap is a part of the change the review could not see: Code names the kind, Items the paths or names.
@@ -83,10 +85,11 @@ type Gap struct {
 
 // Review is an imported review result.
 type Review struct {
-	N          int       `json:"n"`
-	Snapshot   string    `json:"snapshot"`
-	ImportedAt time.Time `json:"imported_at"`
-	Coverage   string    `json:"coverage"`
+	N            int       `json:"n"`
+	Snapshot     string    `json:"snapshot"`
+	ImportedAt   time.Time `json:"imported_at"`
+	Coverage     string    `json:"coverage"`
+	CoverageGaps []Gap     `json:"coverage_gaps,omitempty"`
 }
 
 // Summary is one line of run list.
