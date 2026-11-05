@@ -145,7 +145,7 @@ func Template(root, name string) (*template.Template, error) {
 		return nil, output.Invalid("mr_template_outside_repo",
 			fmt.Sprintf("mr.template %q is not a path inside the repository", name),
 			"set mr.template in .plait/config.yaml to a path relative to the repository root, "+
-				"or to \"\" for the built-in one")
+				"or to \"\" for the built-in one, then plait mr describe")
 	}
 	r, err := os.OpenRoot(root)
 	if err != nil {

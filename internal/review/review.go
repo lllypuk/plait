@@ -36,7 +36,7 @@ const (
 	packageFile = "package.md"
 	minFence    = 3
 	dirPerm     = 0o750
-	rulesFix    = "list existing files relative to the repository root in review.rules of .plait/config.yaml"
+	rulesFix    = "list existing files relative to the repository root in review.rules of .plait/config.yaml, then plait review export"
 )
 
 var (

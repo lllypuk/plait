@@ -85,7 +85,7 @@ const maxAnswerSize = 4 << 20
 
 var errAnswerTooLarge = output.Invalid(
 	"answer_too_large", fmt.Sprintf("the answer is over %d bytes", maxAnswerSize),
-	"keep only the JSON object of review-findings/v1 and import it again")
+	"keep only the JSON object of review-findings/v1 and import it again: plait review import <file>")
 
 func (a *app) newReviewImportCmd() *cobra.Command {
 	return &cobra.Command{

@@ -18,7 +18,7 @@ const (
 	GapFilesExcluded = "files_excluded"
 )
 
-const globsFix = "fix the patterns in audit.deny_globs of .plait/config.yaml"
+const globsFix = "fix the patterns in audit.deny_globs of .plait/config.yaml, then plait review export"
 
 // MatchGlob reports whether a slash path from the repository root matches pattern;
 // path.Match applies per segment and "**" spans any number of segments.

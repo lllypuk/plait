@@ -99,3 +99,40 @@ func TestAgent(t *testing.T) {
 		})
 	}
 }
+
+func TestAppendTruncatesExcluded(t *testing.T) {
+	dir := t.TempDir()
+	e := audit.Entry{Cmd: "review export", Run: "r", Context: []audit.File{{Path: "task.md"}}}
+	for i := range 3000 {
+		e.Excluded = append(e.Excluded, audit.Excluded{
+			Path: fmt.Sprintf("secrets/%s/key-%d.pem", strings.Repeat("s", 20), i), Reason: audit.ReasonDenyGlob,
+		})
+	}
+	if err := audit.Append(dir, e); err != nil {
+		t.Fatal(err)
+	}
+	var got audit.Entry
+	if err := json.Unmarshal(readLines(t, dir)[0], &got); err != nil {
+		t.Fatal(err)
+	}
+	if !got.Truncated || len(got.Context) != 1 || len(got.Excluded) == 0 || len(got.Excluded) >= len(e.Excluded) {
+		t.Errorf("truncated = %v, context %d, excluded %d of %d",
+			got.Truncated, len(got.Context), len(got.Excluded), len(e.Excluded))
+	}
+}
+
+func TestAppendErrors(t *testing.T) {
+	dir := t.TempDir()
+	if err := audit.Append(
+		dir,
+		audit.Entry{Cmd: "mr describe", Error: strings.Repeat("x", audit.MaxLine)},
+	); err == nil {
+		t.Error("oversized entry without lists: no error")
+	}
+	if _, err := os.Stat(filepath.Join(dir, audit.FileName)); !os.IsNotExist(err) {
+		t.Errorf("oversized entry left a log: %v", err)
+	}
+	if err := audit.Append(filepath.Join(dir, "missing"), audit.Entry{Cmd: "ctx save"}); err == nil {
+		t.Error("missing run dir: no error")
+	}
+}

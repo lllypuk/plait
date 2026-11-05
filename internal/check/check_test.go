@@ -235,3 +235,45 @@ func wantInvalid(t *testing.T, err error, code string) {
 		t.Errorf("error %q has no fix", code)
 	}
 }
+
+func TestList(t *testing.T) {
+	s, repo := setup(t)
+	st, err := s.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	runDir := s.RunDir(st.ID)
+	recs, err := check.List(runDir)
+	if err != nil || len(recs) != 0 {
+		t.Fatalf("no checks: recs = %+v, err = %v", recs, err)
+	}
+	for _, name := range []string{"vet", "lint", testCheck} {
+		if _, err = check.Save(t.Context(), s, repo, check.Input{Name: name}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	dir := filepath.Join(runDir, check.Dir)
+	write(t, dir, "notes.txt", "skip\n")
+	write(t, dir, "Bad.json", "skip\n")
+	if err = os.Mkdir(filepath.Join(dir, "sub.json"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	recs, err = check.List(runDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, r := range recs {
+		names = append(names, r.Name)
+	}
+	if strings.Join(names, ",") != "lint,test,vet" {
+		t.Errorf("names = %v", names)
+	}
+
+	write(t, dir, "fmt.json", "{")
+	_, err = check.List(runDir)
+	wantInvalid(t, err, "check_unreadable")
+	write(t, dir, "fmt.json", `{"name":"other"}`)
+	_, err = check.List(runDir)
+	wantInvalid(t, err, "check_unreadable")
+}

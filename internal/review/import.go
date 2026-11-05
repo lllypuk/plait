@@ -152,10 +152,12 @@ func Import(ctx context.Context, s *run.Store, repo vcs.Repo, data []byte, name 
 		return ImportResult{}, err
 	}
 	if a.Snapshot != snap.Commit {
-		return ImportResult{}, output.Invalid("snapshot_mismatch",
+		return ImportResult{}, output.Invalid(
+			"snapshot_mismatch",
 			fmt.Sprintf("the answer reviews snapshot %s, but the last snapshot %d of run %s is %s",
 				a.Snapshot, snap.N, st.ID, snap.Commit),
-			"review "+pkg+" in a fresh session and import that answer: its snapshot must be "+snap.Commit)
+			"review "+pkg+" in a fresh session, then plait review import <file>; the answer's snapshot must be "+snap.Commit,
+		)
 	}
 	if want := coverage(st.Task); a.Coverage != want {
 		return ImportResult{}, output.Invalid("coverage_mismatch",
