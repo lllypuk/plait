@@ -1,0 +1,26 @@
+# Review report: run {{.Run}}, snapshot {{.Snapshot}}
+
+- Coverage: {{.CoverageLabel}}
+- Snapshot: `{{.Commit}}`
+- Base: `{{.Base}}`
+- Answer: `{{.Review}}`
+{{- if .Stale}}
+
+**Stale:** the working copy changed after snapshot {{.Snapshot}}, so the findings describe the code as it was then. Run `plait review export` for a review of the current code.
+{{- end}}
+
+## Findings: {{.Counts.Blocker}} blocker, {{.Counts.Major}} major, {{.Counts.Minor}} minor, {{.Counts.Nit}} nit
+{{- range .Groups}}
+
+### {{title .Severity}}
+{{range .Findings}}
+- **{{.ID}}** `{{.File}}:{{.Line}}` {{.Title}}
+  {{indent .Rationale}}
+{{- if .Criterion}}
+  Criterion: {{indent .Criterion}}
+{{- end}}
+{{- end}}
+{{- else}}
+
+No findings.
+{{- end}}

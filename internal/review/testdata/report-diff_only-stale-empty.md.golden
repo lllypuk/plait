@@ -1,0 +1,12 @@
+# Review report: run PROJ-7-order-retry, snapshot 2
+
+- Coverage: only the diff was checked: the task has no acceptance criteria
+- Snapshot: `0123456789abcdef0123456789abcdef01234567`
+- Base: `89abcdef0123456789abcdef0123456789abcdef`
+- Answer: `.plait/runs/PROJ-7-order-retry/review-2.json`
+
+**Stale:** the working copy changed after snapshot 2, so the findings describe the code as it was then. Run `plait review export` for a review of the current code.
+
+## Findings: 0 blocker, 0 major, 0 minor, 0 nit
+
+No findings.

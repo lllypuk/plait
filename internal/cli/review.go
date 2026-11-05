@@ -23,7 +23,7 @@ func (a *app) newReviewCmd() *cobra.Command {
 		Short: "Export the review package, import the answer and report it",
 		Args:  cobra.NoArgs,
 	}
-	cmd.AddCommand(a.newReviewExportCmd(), a.newReviewImportCmd())
+	cmd.AddCommand(a.newReviewExportCmd(), a.newReviewImportCmd(), a.newReviewReportCmd())
 	return cmd
 }
 
@@ -137,4 +137,27 @@ func importText(res review.ImportResult) string {
 		text += "stale: the working copy changed after the snapshot, the report will say so\n"
 	}
 	return text + "next: plait review report"
+}
+
+func (a *app) newReviewReportCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "report",
+		Short: "Show the imported review with its coverage label and findings by severity",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			root, err := a.repoRoot()
+			if err != nil {
+				return err
+			}
+			res, err := review.BuildReport(cmd.Context(), run.Open(root), vcs.Repo{Root: root})
+			if err != nil {
+				return err
+			}
+			md, err := review.RenderReport(res)
+			if err != nil {
+				return err
+			}
+			return a.printer().Success(res, string(md))
+		},
+	}
 }

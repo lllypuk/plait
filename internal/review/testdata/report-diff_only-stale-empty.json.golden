@@ -1,0 +1,18 @@
+{
+  "run": "PROJ-7-order-retry",
+  "snapshot": 2,
+  "commit": "0123456789abcdef0123456789abcdef01234567",
+  "base": "89abcdef0123456789abcdef0123456789abcdef",
+  "coverage": "diff_only",
+  "coverage_label": "only the diff was checked: the task has no acceptance criteria",
+  "stale": true,
+  "review": ".plait/runs/PROJ-7-order-retry/review-2.json",
+  "counts": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 0,
+    "nit": 0
+  },
+  "findings": [],
+  "step": "reported"
+}

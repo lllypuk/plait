@@ -75,7 +75,7 @@ func Next(st *State) (Instruction, error) {
 		}
 		in.Allowed = []string{cmdReviewReport, cmdReviewExport, cmdReviewImport}
 	default:
-		return Instruction{}, brokenState(st, fmt.Sprintf("unknown step %q", st.Step))
+		return Instruction{}, BrokenState(st, fmt.Sprintf("unknown step %q", st.Step))
 	}
 	in.Allowed = append(in.Allowed, "next", "run list", "run resume", "run new")
 	return in, nil
@@ -83,19 +83,20 @@ func Next(st *State) (Instruction, error) {
 
 func lastSnapshot(st *State) (string, error) {
 	if len(st.Snapshots) == 0 {
-		return "", brokenState(st, "step "+string(st.Step)+" without a snapshot")
+		return "", BrokenState(st, "step "+string(st.Step)+" without a snapshot")
 	}
 	return strconv.Itoa(st.Snapshots[len(st.Snapshots)-1].N), nil
 }
 
 func lastReview(st *State) (string, error) {
 	if len(st.Reviews) == 0 {
-		return "", brokenState(st, "step "+string(st.Step)+" without an imported review")
+		return "", BrokenState(st, "step "+string(st.Step)+" without an imported review")
 	}
 	return strconv.Itoa(st.Reviews[len(st.Reviews)-1].N), nil
 }
 
-func brokenState(st *State, why string) error {
+// BrokenState reports a state.json plait cannot act on; only a human may repair it.
+func BrokenState(st *State, why string) error {
 	file := path.Join(".plait", "runs", st.ID, stateFile)
 	return output.NeedsHuman("state_corrupt", fmt.Sprintf("%s: %s", file, why),
 		"stop and ask a human to repair "+file+" or start over with "+newRunFix)
