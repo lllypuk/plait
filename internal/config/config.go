@@ -8,13 +8,11 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
+	"slices"
 	"strings"
 
-	"github.com/go-viper/mapstructure/v2"
-	"github.com/knadh/koanf/parsers/yaml"
-	"github.com/knadh/koanf/providers/confmap"
-	"github.com/knadh/koanf/providers/env/v2"
-	"github.com/knadh/koanf/v2"
+	"go.yaml.in/yaml/v3"
 
 	"github.com/lllypuk/plait/internal/output"
 )
@@ -26,13 +24,13 @@ const envPrefix = "PLAIT_"
 
 // Config is the merged plait configuration.
 type Config struct {
-	Review Review `koanf:"review"`
+	Review Review `yaml:"review"`
 }
 
 // Review configures review export.
 type Review struct {
-	Base  string   `koanf:"base"`
-	Rules []string `koanf:"rules"`
+	Base  string   `yaml:"base"`
+	Rules []string `yaml:"rules"`
 }
 
 // Sources lists the layers in ascending priority; a missing or empty file path is skipped.
@@ -67,101 +65,111 @@ func userConfigFile() string {
 	return filepath.Join(dir, "plait", "config.yaml")
 }
 
-// Load merges all layers; each layer is decoded on its own first, so an error names its source.
+// Load decodes the layers in order into one Config: a file sets only the keys it has, a list replaces the lower one.
 func Load(s Sources) (Config, error) {
-	k := koanf.New(".")
-	def, defErr := yaml.Parser().Unmarshal(defaults)
-	if defErr != nil {
-		return Config{}, output.Internal(fmt.Errorf("embedded defaults: %w", defErr))
+	var cfg Config
+	if err := yaml.Unmarshal(defaults, &cfg); err != nil {
+		return Config{}, output.Internal(fmt.Errorf("embedded defaults: %w", err))
 	}
-	layers := []layer{{name: "embedded defaults", values: def}}
-
 	for _, path := range []string{s.System, s.User, s.Repo} {
-		l, ok, err := fileLayer(path)
-		if err != nil {
+		if err := loadFile(path, &cfg); err != nil {
 			return Config{}, err
 		}
-		if ok {
-			layers = append(layers, l)
-		}
 	}
 
-	envValues, envErr := env.Provider(".", env.Opt{
-		Prefix:        envPrefix,
-		TransformFunc: envKey,
-		EnvironFunc:   func() []string { return s.Environ },
-	}).Read()
-	if envErr != nil {
-		return Config{}, output.Internal(envErr)
+	keys := map[string]reflect.Value{}
+	leaves(reflect.ValueOf(&cfg).Elem(), "", keys)
+	byEnv := make(map[string]string, len(keys))
+	for k := range keys {
+		byEnv[envPrefix+strings.ToUpper(strings.ReplaceAll(k, ".", "_"))] = k
 	}
-	layers = append(layers,
-		layer{name: "PLAIT_* environment", values: envValues, fix: "unset or correct the PLAIT_* variable"},
-		layer{name: "flags", values: s.Flags, fix: "correct the flag value"},
-	)
-
-	for _, l := range layers {
-		if err := l.check(); err != nil {
-			return Config{}, err
+	for _, kv := range s.Environ {
+		name, val, _ := strings.Cut(kv, "=")
+		k, ok := byEnv[name]
+		if !ok {
+			continue
 		}
-		if err := k.Load(confmap.Provider(l.values, "."), nil); err != nil {
-			return Config{}, output.Internal(err)
+		if err := set(keys[k], val); err != nil {
+			return Config{}, invalid(name+": "+err.Error(), "unset or correct "+name, err)
 		}
 	}
-	return decode(k)
+	for k, v := range s.Flags {
+		f, ok := keys[k]
+		if !ok {
+			return Config{}, output.Internal(fmt.Errorf("flag sets unknown config key %q", k))
+		}
+		if err := set(f, v); err != nil {
+			return Config{}, invalid("flag for "+k+": "+err.Error(), "correct the flag value", err)
+		}
+	}
+	return cfg, nil
 }
 
-type layer struct {
-	name   string
-	values map[string]any
-	fix    string
-}
-
-// fileLayer reports ok=false for a path that is empty or does not exist.
-func fileLayer(path string) (layer, bool, error) {
+// loadFile skips a path that is empty or does not exist.
+func loadFile(path string, cfg *Config) error {
 	if path == "" {
-		return layer{}, false, nil
+		return nil
 	}
 	b, err := os.ReadFile(filepath.Clean(path))
 	if errors.Is(err, fs.ErrNotExist) {
-		return layer{}, false, nil
+		return nil
 	}
 	if err != nil {
-		return layer{}, false, output.Internal(fmt.Errorf("read config %s: %w", path, err))
+		return output.Internal(fmt.Errorf("read config %s: %w", path, err))
 	}
-	fix := "fix " + path + " or remove it, then rerun the command"
-	values, err := yaml.Parser().Unmarshal(b)
-	if err != nil {
-		e := output.Invalid("config_invalid", fmt.Sprintf("config %s is not valid YAML: %v", path, err), fix)
-		e.Err = err
-		return layer{}, false, e
-	}
-	return layer{name: "config " + path, values: values, fix: fix}, true, nil
-}
-
-func (l layer) check() error {
-	k := koanf.New(".")
-	if err := k.Load(confmap.Provider(l.values, "."), nil); err != nil {
-		return output.Internal(err)
-	}
-	if _, err := decode(k); err != nil {
-		e := output.Invalid("config_invalid", fmt.Sprintf("%s: %v", l.name, err), l.fix)
-		e.Err = err
-		return e
+	if err = yaml.Unmarshal(b, cfg); err != nil {
+		fix := "fix " + path + " or remove it, then rerun the command"
+		return invalid(fmt.Sprintf("config %s: %v", path, err), fix, err)
 	}
 	return nil
 }
 
-func decode(k *koanf.Koanf) (Config, error) {
-	var cfg Config
-	err := k.UnmarshalWithConf("", &cfg, koanf.UnmarshalConf{DecoderConfig: &mapstructure.DecoderConfig{
-		DecodeHook:       mapstructure.StringToSliceHookFunc(","),
-		WeaklyTypedInput: true,
-		Result:           &cfg,
-	}})
-	return cfg, err
+func invalid(msg, fix string, err error) error {
+	e := output.Invalid("config_invalid", msg, fix)
+	e.Err = err
+	return e
 }
 
-// envKey maps PLAIT_REVIEW_BASE to review.base.
-func envKey(k, v string) (string, any) {
-	return strings.ReplaceAll(strings.ToLower(strings.TrimPrefix(k, envPrefix)), "_", "."), v
+// leaves maps dotted yaml keys to the non-struct fields of v.
+func leaves(v reflect.Value, prefix string, out map[string]reflect.Value) {
+	t := v.Type()
+	for i := range t.NumField() {
+		name, _, _ := strings.Cut(t.Field(i).Tag.Get("yaml"), ",")
+		if name == "" || name == "-" {
+			continue
+		}
+		if f := v.Field(i); f.Kind() == reflect.Struct {
+			leaves(f, prefix+name+".", out)
+		} else {
+			out[prefix+name] = f
+		}
+	}
+}
+
+// set assigns an env or flag value; a string for a list field is split on commas.
+func set(f reflect.Value, v any) error {
+	switch f.Interface().(type) {
+	case string:
+		s, ok := v.(string)
+		if !ok {
+			return fmt.Errorf("want a string, got %T", v)
+		}
+		f.SetString(s)
+	case []string:
+		switch x := v.(type) {
+		case string:
+			list := []string{}
+			if x != "" {
+				list = strings.Split(x, ",")
+			}
+			f.Set(reflect.ValueOf(list))
+		case []string:
+			f.Set(reflect.ValueOf(slices.Clone(x)))
+		default:
+			return fmt.Errorf("want a comma-separated list, got %T", v)
+		}
+	default:
+		return fmt.Errorf("unsupported config field type %s", f.Type())
+	}
+	return nil
 }

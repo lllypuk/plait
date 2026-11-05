@@ -239,7 +239,7 @@ agents:
 cmd/plait/main.go
 internal/
   cli/        # cobra: setup init doctor next guide status run plan review approve mr stats ...
-  config/     # koanf: embed defaults → /etc/plait → ~/.config/plait → .plait/config.yaml → env → flags
+  config/     # yaml.v3, слои по очереди в одну структуру: embed defaults → /etc/plait → ~/.config/plait → .plait/config.yaml → env → flags
   pipeline/   # state machine, Stage, Gate, Run, policy (autonomy), state.json
   artifact/   # шаблоны и валидаторы plan/review/analysis, JSON Schema
   agent/      # интерфейс Agent + registry
@@ -323,7 +323,7 @@ comms: { transport: mcp, max_ask_depth: 1, max_messages_per_stage: 30 }
 audit: { redact: true, deny_globs: [".env*", "**/*.pem", "**/secrets/**"] }
 ```
 
-Библиотеки: `spf13/cobra`, `knadh/koanf`, `charmbracelet/huh` + `lipgloss`, `log/slog`, `gitlab.com/gitlab-org/api/client-go/v2`, `google/go-github`, `modelcontextprotocol/go-sdk`, `zalando/go-keyring`. Процессы агентов запускаются через `exec.CommandContext` в отдельной process group.
+Библиотеки: `spf13/cobra`, `go.yaml.in/yaml/v3` (слои конфига сливаются своим кодом, без koanf), `charmbracelet/huh` + `lipgloss`, `log/slog`, `gitlab.com/gitlab-org/api/client-go/v2`, `google/go-github`, `modelcontextprotocol/go-sdk`, `zalando/go-keyring`. Процессы агентов запускаются через `exec.CommandContext` в отдельной process group.
 
 ## Jira и MR/PR
 
@@ -390,7 +390,7 @@ audit: { redact: true, deny_globs: [".env*", "**/*.pem", "**/secrets/**"] }
 
 Первая поставка проверяет гипотезу v0; всё после неё — только после замера. Объём этапов и условия продолжения — в `docs/development-plan.md`.
 
-1. **v0: ревью и описание MR с одним агентом.** cobra + koanf, `version`, `doctor`, `setup`/`init` для двух пилотных агентов с наследуемыми адаптерами (`base:`), `next --json`, `state.json`, аудит-журнал, `make build`. `ctx` (импорт через агента, локальное описание), `review collect/save` со снимком диффа, схемой находок и сравнением прогонов, ревью тем же агентом в свежей сессии через ручной пакет, импорт/экспорт ревью, `mr describe`. Минимум закрытого контура: прокси, корпоративный CA, внутренние endpoint'ы моделей, без телеметрии.
+1. **v0: ревью и описание MR с одним агентом.** cobra + yaml.v3, `version`, `doctor`, `setup`/`init` для двух пилотных агентов с наследуемыми адаптерами (`base:`), `next --json`, `state.json`, аудит-журнал, `make build`. `ctx` (импорт через агента, локальное описание), `review collect/save` со снимком диффа, схемой находок и сравнением прогонов, ревью тем же агентом в свежей сессии через ручной пакет, импорт/экспорт ревью, `mr describe`. Минимум закрытого контура: прокси, корпоративный CA, внутренние endpoint'ы моделей, без телеметрии.
 2. **Второе мнение.** Headless-адаптеры двух пилотных агентов с проверенным read-only (остальные помечены experimental), автоматическая свежая сессия, `review --with` и сведённый отчёт, `plait worker` на одно задание для песочниц, где запуск агентов запрещён. Skills для остальных трёх агентов.
 3. **Маршруты и MR.** `routes` в конфиге, `analyze`, `plan new/check/save`, `plan_review`, гейт `approve` через TTY, публикация плана в `docs/plans`, `mr create` по разрешению `forge.create_mr` для GitLab (client-go), затем GitHub, `ctx` в режиме `rest`.
 4. **Реализация и цикл.** `implement --step`, `fix` с лимитом итераций и детектором стагнации, `verify`, worktree, политика автономии по путям.

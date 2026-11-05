@@ -173,3 +173,33 @@ func TestDefaultSources(t *testing.T) {
 		t.Errorf("User with XDG_CONFIG_HOME = %q", got)
 	}
 }
+
+func TestLoadEnvIgnoresUnknownKeys(t *testing.T) {
+	cfg, err := config.Load(sources(t, layers{env: []string{"PLAIT_NOPE=x", "PLAIT_REVIEW_RULES="}}))
+	if err != nil {
+		t.Fatalf("config.Load: %v", err)
+	}
+	if len(cfg.Review.Rules) != 0 {
+		t.Errorf("empty PLAIT_REVIEW_RULES must clear the list, got %q", cfg.Review.Rules)
+	}
+}
+
+func TestLoadFlags(t *testing.T) {
+	cfg, err := config.Load(sources(t, layers{flags: map[string]any{"review.rules": []string{"x.md"}}}))
+	if err != nil {
+		t.Fatalf("config.Load: %v", err)
+	}
+	if !slices.Equal(cfg.Review.Rules, []string{"x.md"}) {
+		t.Errorf("review.rules = %q", cfg.Review.Rules)
+	}
+
+	_, err = config.Load(sources(t, layers{flags: map[string]any{"review.base": 7}}))
+	if e, ok := errors.AsType[*output.Error](err); !ok || e.Kind != output.KindInvalid {
+		t.Errorf("wrong flag type: err = %v, want Invalid", err)
+	}
+
+	_, err = config.Load(sources(t, layers{flags: map[string]any{"review.nope": "x"}}))
+	if e, ok := errors.AsType[*output.Error](err); !ok || e.Kind != output.KindInternal {
+		t.Errorf("unknown flag key: err = %v, want Internal", err)
+	}
+}

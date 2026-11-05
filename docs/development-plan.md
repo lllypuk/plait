@@ -36,7 +36,7 @@
 
 | Работа | SP |
 | --- | --- |
-| Каркас: `go.mod`, cobra, слои koanf; `Makefile` с `build`, `test`, `lint` (golangci-lint с gosec), `vuln` (govulncheck) и `check`, объединяющим их; CI вызывает те же make-цели, релизного конвейера нет | 5 |
+| Каркас: `go.mod`, cobra, слои конфига на yaml.v3; `Makefile` с `build`, `test`, `lint` (golangci-lint с gosec), `vuln` (govulncheck) и `check`, объединяющим их; CI вызывает те же make-цели, релизного конвейера нет | 5 |
 | Контракт вывода и run: JSON/TTY, exit codes, `next --json`, `state.json`, `run new/resume/list`, идемпотентность, восстановление после прерывания | 8 |
 | `setup`/`init` для двух пилотных агентов: embed skills, наследование `base:`, deny-правила, секция `AGENTS.md`, сохранность пользовательских файлов, повторный запуск, `--dry-run`/`--uninstall` | 8 |
 | `doctor` и минимум закрытого контура: прокси, корпоративный CA, внутренний endpoint модели, без телеметрии; путь пилота проверен и задокументирован | 8 |
