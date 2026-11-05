@@ -4,7 +4,7 @@ A Go CLI used by coding agents, not people. It walks Claude Code, Codex, Gemini 
 
 Process logic, checks and gates live in a deterministic binary, not in a prompt. The developer stays in their own agent and calls a skill such as `/plait-review`; the agent asks `plait next` what to do and saves results through `plait`.
 
-> **Status:** pre-alpha. The first end-to-end slice of v0 works; setup, doctor and run comparison do not exist yet. Design docs are in Russian.
+> **Status:** pre-alpha. The v0 review core works: snapshots, run comparison, captured checks, audit log and `mr describe`; setup and doctor do not exist yet. Design docs are in Russian.
 
 ## First version (v0)
 
@@ -18,24 +18,32 @@ A second agent from another vendor reviewing read-only comes next, as an opt-in.
 
 plait assists the process; it does not enforce it. An agent can edit code without calling plait. Making the flow mandatory for merge takes a separate CI gate, which v0 does not have.
 
-## Try the slice
+## Try it
 
 Needs Go and git. Run inside a git repository with a commit on `HEAD`; the diff base is `origin/HEAD`, `main` or `master`, or `--base`.
 
 ```sh
 make build                              # bin/plait
 plait run new order-retry --key PROJ-7
-plait ctx save < task.md                # task and acceptance criteria; missing criteria are marked as a gap
+plait ctx save PROJ-7 < task.md         # task and acceptance criteria; the key goes into the MR title
+go test ./... > test.log; plait check save test --exit-code $? --file test.log   # result bound to the working tree
 plait review export                     # snapshot under refs/plait, package in .plait/runs/<id>/review-<n>/package.md
 # open a fresh agent session, give it package.md, save its JSON answer
 plait review import answer.json         # checked against review-findings/v1 and bound to the snapshot
-plait review report                     # findings by severity, coverage label, stale mark
+plait review report                     # findings by status and severity, coverage label with gaps
+# fix, then review again: open findings go into the next package for a verdict
+plait review export
+plait review import answer2.json        # previous[]: fixed | still_open | not_checked per finding key
+plait review report                     # fix_confirmed, open, region_changed, outdated
+plait mr describe --summary-file -      # title and body into .plait/runs/<id>/mr.md; creates no MR
 plait next --json                       # what to do next, at any step
 ```
 
+A finding counts as fixed only on the reviewer's `fixed` verdict; a changed or deleted region without one is `region_changed` or `outdated`, to recheck. Checks are not run by plait: the agent runs them and saves the output, which counts as fresh only if the working tree matches the snapshot. Files matching `audit.deny_globs` never enter the package; `.plait/runs/<id>/audit.jsonl` logs every run command with paths and hashes, not contents.
+
 `plait run list` and `plait run resume <id>` switch the current run. Run state lives in `.plait/` in the working copy: it is left out of snapshots, but add it to the repository's `.gitignore` yourself. Snapshots never touch your index or branches, and `refs/plait/*` are not pushed.
 
-Config layers, later wins: built-in defaults → `/etc/plait/config.yaml` → `~/.config/plait/config.yaml` (honours `XDG_CONFIG_HOME`) → `.plait/config.yaml` → `PLAIT_*` env (`PLAIT_REVIEW_BASE`, lists comma-separated) → flags. Keys: `review.base` — the diff base; `review.rules` — repo files put into the review package, inside the repository only (default `AGENTS.md`, `CLAUDE.md`, `.plait/rules.md`).
+Config layers, later wins: built-in defaults → `/etc/plait/config.yaml` → `~/.config/plait/config.yaml` (honours `XDG_CONFIG_HOME`) → `.plait/config.yaml` → `PLAIT_*` env (`PLAIT_REVIEW_BASE`, lists comma-separated) → flags. Keys: `review.base` — the diff base; `review.rules` — repo files put into the review package, inside the repository only (default `AGENTS.md`, `CLAUDE.md`, `.plait/rules.md`); `review.max_diff_bytes` — above it whole files drop out of the diff, biggest first; `review.checks` — expected check names, missing ones are a coverage gap; `audit.deny_globs` — paths kept out of the package; `mr.template` — repo path to a custom `text/template` for `mr describe`.
 
 Outside a TTY or with `--json` every command answers with JSON; exit codes are 0 ok, 2 invalid input, 3 forbidden by policy, 4 needs a human.
 
