@@ -1,0 +1,48 @@
+# an edit after the export does not block the import; the report is marked stale
+env GIT_CONFIG_NOSYSTEM=1
+env GIT_AUTHOR_NAME=dev GIT_AUTHOR_EMAIL=dev@example.com GIT_COMMITTER_NAME=dev GIT_COMMITTER_EMAIL=dev@example.com
+mkdir repo
+cd repo
+exec git init -q -b main
+cp ../a.txt a.txt
+exec git add -A
+exec git commit -q -m init
+exec git checkout -q -b feature
+
+exec plait run new order-retry
+stdin ../task.md
+exec plait ctx save --json
+cp ../a2.txt a.txt
+exec plait review export --json
+capture SNAPSHOT '"commit":"([0-9a-f]{40})"'
+expand ../answer.json ../answer-ok.json
+
+cp ../a3.txt a.txt
+exec plait review import ../answer-ok.json --json
+stdout '"stale":true,.*"step":"imported"'
+exec plait next --json
+stdout '"step":"imported".*"output":\{"cmd":"plait review report"\}'
+exec plait review report --json
+stdout '"stale":true'
+stdout '"step":"reported"'
+exec plait next --json
+stdout '"step":"reported".*"output":\{"cmd":"plait review export"\}'
+
+# the next export takes a fresh snapshot of the edit
+exec plait review export --json
+stdout '"snapshot":2,.*"step":"exported"'
+
+-- a.txt --
+a
+-- a2.txt --
+a changed
+-- a3.txt --
+a changed again
+-- task.md --
+# Retry failed orders
+
+## Acceptance criteria
+
+- retried 3 times
+-- answer.json --
+{"snapshot": "$SNAPSHOT", "coverage": "criteria", "findings": []}

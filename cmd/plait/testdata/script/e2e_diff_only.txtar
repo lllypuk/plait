@@ -1,0 +1,40 @@
+# a task without acceptance criteria goes through the slice and ends with a diff-only report
+env GIT_CONFIG_NOSYSTEM=1
+env GIT_AUTHOR_NAME=dev GIT_AUTHOR_EMAIL=dev@example.com GIT_COMMITTER_NAME=dev GIT_COMMITTER_EMAIL=dev@example.com
+mkdir repo
+cd repo
+exec git init -q -b main
+cp ../a.txt a.txt
+exec git add -A
+exec git commit -q -m init
+exec git checkout -q -b feature
+
+exec plait run new order-retry
+stdin ../task.md
+exec plait ctx save --json
+exec plait next --json
+capture INPUT '"inputs":\["([^"]+)"\]'
+grep 'plait:gap acceptance_criteria' $INPUT
+
+cp ../a2.txt a.txt
+exec plait review export --json
+stdout '"coverage":"diff_only"'
+capture SNAPSHOT '"commit":"([0-9a-f]{40})"'
+expand ../answer.json ../answer-ok.json
+exec plait review import ../answer-ok.json --json
+exec plait review report --json
+stdout '"coverage":"diff_only","coverage_label":"only the diff was checked: the task has no acceptance criteria"'
+stdout '"counts":\{"blocker":0,"major":0,"minor":0,"nit":0\},"findings":\[\]'
+exec plait next --json
+stdout '"step":"reported"'
+
+-- a.txt --
+a
+-- a2.txt --
+a changed
+-- task.md --
+# Retry failed orders
+
+Retry orders that failed.
+-- answer.json --
+{"snapshot": "$SNAPSHOT", "coverage": "diff_only", "findings": []}

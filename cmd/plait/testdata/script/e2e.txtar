@@ -1,0 +1,75 @@
+# the whole slice in one run: every command leaves the step next --json points to the following command
+env GIT_CONFIG_NOSYSTEM=1
+env GIT_AUTHOR_NAME=dev GIT_AUTHOR_EMAIL=dev@example.com GIT_COMMITTER_NAME=dev GIT_COMMITTER_EMAIL=dev@example.com
+mkdir repo
+cd repo
+exec git init -q -b main
+cp ../retry.go retry.go
+exec git add -A
+exec git commit -q -m init
+exec git checkout -q -b feature
+
+exec plait run new order-retry --key PROJ-7 --json
+stdout '"run":"PROJ-7-order-retry","step":"new"'
+exec plait next --json
+stdout '"step":"new".*"inputs":\[\],"output":\{"cmd":"plait ctx save < task.md"\}'
+
+stdin ../task.md
+exec plait ctx save --json
+stdout '"step":"task_saved"'
+exec plait next --json
+stdout '"step":"task_saved".*"output":\{"cmd":"plait review export"\}'
+capture INPUT '"inputs":\["([^"]+)"\]'
+grep 'retried 3 times' $INPUT
+
+cp ../retry2.go retry.go
+exec plait review export --json
+stdout '"snapshot":1,.*"coverage":"criteria".*"step":"exported"'
+capture SNAPSHOT '"commit":"([0-9a-f]{40})"'
+exec plait next --json
+stdout '"step":"exported".*"output":\{"cmd":"plait review import <file\|->","schema":"review-findings/v1"\}'
+capture INPUT '"inputs":\["([^"]+)"\]'
+grep $SNAPSHOT $INPUT
+grep 'retried 3 times' $INPUT
+
+expand ../answer.json ../answer-ok.json
+exec plait review import ../answer-ok.json --json
+stdout '"stale":false,.*"step":"imported"'
+exec plait next --json
+stdout '"step":"imported".*"output":\{"cmd":"plait review report"\}'
+capture INPUT '"inputs":\["([^"]+)"\]'
+grep $SNAPSHOT $INPUT
+
+exec plait review report --json
+stdout '"coverage":"criteria","coverage_label":"checked against the task''s acceptance criteria","stale":false'
+stdout '"counts":\{"blocker":0,"major":1,"minor":0,"nit":0\}.*"criterion":"retried 3 times"'
+stdout '"step":"reported"'
+exec plait next --json
+stdout '"step":"reported".*"output":\{"cmd":"plait review export"\}'
+
+# the slice never touches the developer's index
+exec git diff --cached --name-only
+! stdout .
+
+-- retry.go --
+package retry
+-- retry2.go --
+package retry
+
+func Retry() {}
+-- task.md --
+# Retry failed orders
+
+Retry orders that failed.
+
+## Acceptance criteria
+
+- retried 3 times
+-- answer.json --
+{
+  "snapshot": "$SNAPSHOT",
+  "coverage": "criteria",
+  "findings": [
+    {"id": "F1", "severity": "major", "file": "retry.go", "line": 3, "title": "no retry", "rationale": "Retry does nothing", "criterion": "retried 3 times"}
+  ]
+}
