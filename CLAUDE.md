@@ -12,13 +12,15 @@ plait — Go CLI, которой пользуются coding-агенты (Claud
 
 ## Команды
 
-Планируемые, по брифу; уточнить, когда появятся `Makefile` и `go.mod`:
+Планируемые, по `docs/development-plan.md`; уточнить, когда появятся `Makefile` и `go.mod`. Всё запускается через make, CI вызывает те же цели:
 
 ```sh
-make build              # или go build ./cmd/plait
-go test ./...
+make build
+make test
 go test ./internal/pipeline -run TestName
-golangci-lint run
+make lint      # golangci-lint, gosec внутри него
+make vuln      # govulncheck
+make check     # всё перед коммитом
 ```
 
 ## Инварианты, которые легко нарушить
