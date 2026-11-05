@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -48,7 +49,7 @@ func (a *app) newReviewExportCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			res, err := review.Export(cmd.Context(), run.Open(root), vcs.Repo{Root: root}, cfg.Review)
+			res, err := review.Export(cmd.Context(), run.Open(root), vcs.Repo{Root: root}, cfg)
 			if err != nil {
 				return err
 			}
@@ -64,9 +65,13 @@ func exportText(res review.ExportResult) string {
 	if !res.Changed {
 		verb = verbUnchanged
 	}
-	return fmt.Sprintf("%s snapshot %d (%.12s), coverage %s\npackage: %s\n"+
+	var gaps strings.Builder
+	for _, g := range res.Gaps {
+		fmt.Fprintf(&gaps, "coverage gap %s: %s\n", g.Code, strings.Join(g.Items, ", "))
+	}
+	return fmt.Sprintf("%s snapshot %d (%.12s), coverage %s\n%spackage: %s\n"+
 		"next: open a new agent session, give it the package, save its JSON answer, then plait review import <file>",
-		verb, res.Snapshot, res.Commit, res.Coverage, res.Package)
+		verb, res.Snapshot, res.Commit, res.Coverage, gaps.String(), res.Package)
 }
 
 const maxAnswerSize = 4 << 20

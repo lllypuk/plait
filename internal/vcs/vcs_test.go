@@ -126,10 +126,11 @@ func TestSnapshotContent(t *testing.T) {
 		t.Errorf("status changed:\n%s\nwas:\n%s", got, statusBefore)
 	}
 
-	diff, err := r.Diff(t.Context(), s.Base, s.Commit)
+	diffs, err := r.DiffFiles(t.Context(), s.Base, s.Commit)
 	if err != nil {
 		t.Fatal(err)
 	}
+	diff := joinDiffs(diffs)
 	for _, want := range []string{"+a changed", "b/new.txt", "a/b.txt", "b/staged.txt"} {
 		if !strings.Contains(diff, want) {
 			t.Errorf("diff lacks %q:\n%s", want, diff)
@@ -137,6 +138,53 @@ func TestSnapshotContent(t *testing.T) {
 	}
 	if strings.Contains(diff, ".plait") || strings.Contains(diff, "debug.log") {
 		t.Errorf("diff has excluded files:\n%s", diff)
+	}
+}
+
+func joinDiffs(files []vcs.FileDiff) string {
+	var b strings.Builder
+	for _, f := range files {
+		b.WriteString(f.Diff)
+	}
+	return b.String()
+}
+
+func TestDiffFiles(t *testing.T) {
+	dir := newRepo(t, "main")
+	write(t, dir, "old name.txt", strings.Repeat("same line\n", 20))
+	write(t, dir, "x.txt", "x\n")
+	base := commit(t, dir, "more")
+	git(t, dir, "mv", "old name.txt", "new name.txt")
+	write(t, dir, "[x].txt", "glob\n")
+	write(t, dir, "x.txt", "x changed\n")
+	if err := os.Remove(filepath.Join(dir, "b.txt")); err != nil {
+		t.Fatal(err)
+	}
+	head := commit(t, dir, "change")
+
+	files, err := vcs.Repo{Root: dir}.DiffFiles(t.Context(), base, head)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var paths []string
+	for _, f := range files {
+		paths = append(paths, f.OldPath+">"+f.Path)
+	}
+	joined := joinDiffs(files)
+	want := []string{">[x].txt", ">b.txt", "old name.txt>new name.txt", ">x.txt"}
+	if !slices.Equal(paths, want) {
+		t.Errorf("files = %q, want %q", paths, want)
+	}
+	if full := git(t, dir, "diff", "-M", base, head); strings.TrimSpace(joined) != full {
+		t.Errorf("joined per-file diff differs from git diff -M:\n%s\n---\n%s", joined, full)
+	}
+	if !strings.Contains(files[2].Diff, "rename from old name.txt") || strings.Contains(files[0].Diff, "x changed") {
+		t.Errorf("per-file diffs mixed up: %+v", files)
+	}
+
+	same, err := vcs.Repo{Root: dir}.DiffFiles(t.Context(), head, head)
+	if err != nil || len(same) != 0 {
+		t.Errorf("same commit: files = %+v, err = %v", same, err)
 	}
 }
 

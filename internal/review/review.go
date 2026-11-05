@@ -43,10 +43,11 @@ var (
 	packageTmpl string
 )
 
-// Rule is a repository rule file quoted in the package.
+// Rule is a repository rule file quoted in the package; an Excluded rule matched audit.deny_globs and was not read.
 type Rule struct {
-	Path    string
-	Content string
+	Path     string
+	Content  string
+	Excluded bool
 }
 
 // Package is the content of package.md.
@@ -59,18 +60,24 @@ type Package struct {
 	Task     string
 	Rules    []Rule
 	Diff     string
+	// Excluded diff files matched audit.deny_globs; Dropped ones did not fit MaxDiffBytes.
+	Excluded     []string
+	Dropped      []string
+	MaxDiffBytes int
+	Gaps         []run.Gap
 }
 
 // ExportResult describes what review export did.
 type ExportResult struct {
-	Run      string   `json:"run"`
-	Snapshot int      `json:"snapshot"`
-	Commit   string   `json:"commit"`
-	Base     string   `json:"base"`
-	Coverage string   `json:"coverage"`
-	Package  string   `json:"package"`
-	Changed  bool     `json:"changed"`
-	Step     run.Step `json:"step"`
+	Run      string    `json:"run"`
+	Snapshot int       `json:"snapshot"`
+	Commit   string    `json:"commit"`
+	Base     string    `json:"base"`
+	Coverage string    `json:"coverage"`
+	Package  string    `json:"package"`
+	Changed  bool      `json:"changed"`
+	Step     run.Step  `json:"step"`
+	Gaps     []run.Gap `json:"coverage_gaps"`
 }
 
 // Render fills package.md; it depends only on p, so the same input gives the same bytes.
@@ -93,7 +100,8 @@ func Render(p Package) ([]byte, error) {
 }
 
 // LoadRules reads the rule files that exist, in the configured order; a path must stay inside root.
-func LoadRules(root string, paths []string) ([]Rule, error) {
+// A file under deny globs is listed as excluded and never read.
+func LoadRules(root string, paths, deny []string) ([]Rule, error) {
 	r, err := os.OpenRoot(root)
 	if err != nil {
 		return nil, output.Internal(fmt.Errorf("open repository root: %w", err))
@@ -111,6 +119,12 @@ func LoadRules(root string, paths []string) ([]Rule, error) {
 			continue
 		}
 		seen[p] = true
+		if Denied(deny, p) {
+			if _, statErr := r.Lstat(p); statErr == nil {
+				rules = append(rules, Rule{Path: p, Excluded: true})
+			}
+			continue
+		}
 		b, readErr := r.ReadFile(p)
 		if errors.Is(readErr, fs.ErrNotExist) {
 			continue
@@ -124,7 +138,10 @@ func LoadRules(root string, paths []string) ([]Rule, error) {
 }
 
 // Export snapshots the working copy and writes the package; an unchanged working copy, task and rules keep the last snapshot.
-func Export(ctx context.Context, s *run.Store, repo vcs.Repo, cfg config.Review) (ExportResult, error) {
+func Export(ctx context.Context, s *run.Store, repo vcs.Repo, cfg config.Config) (ExportResult, error) {
+	if err := CheckGlobs(cfg.Audit.DenyGlobs); err != nil {
+		return ExportResult{}, err
+	}
 	unlock, err := s.Lock()
 	if err != nil {
 		return ExportResult{}, err
@@ -143,20 +160,22 @@ func Export(ctx context.Context, s *run.Store, repo vcs.Repo, cfg config.Review)
 	if err != nil {
 		return ExportResult{}, output.Internal(fmt.Errorf("read task: %w", err))
 	}
-	rules, err := LoadRules(repo.Root, cfg.Rules)
+	rules, err := LoadRules(repo.Root, cfg.Review.Rules, cfg.Audit.DenyGlobs)
 	if err != nil {
 		return ExportResult{}, err
 	}
-	snap, err := repo.Snapshot(ctx, cfg.Base)
+	snap, err := repo.Snapshot(ctx, cfg.Review.Base)
 	if err != nil {
 		return ExportResult{}, err
 	}
-	diff, err := repo.Diff(ctx, snap.Base, snap.Tree)
+	files, err := repo.DiffFiles(ctx, snap.Base, snap.Tree)
 	if err != nil {
 		return ExportResult{}, err
 	}
+	sc := ScopeDiff(files, cfg.Audit.DenyGlobs, cfg.Review.MaxDiffBytes)
 	p := Package{
-		Run: st.ID, Base: snap.Base, Coverage: coverage(st.Task), Task: string(taskMD), Rules: rules, Diff: diff,
+		Run: st.ID, Base: snap.Base, Coverage: coverage(st.Task), Task: string(taskMD), Rules: rules, Diff: sc.Diff,
+		Excluded: sc.Excluded, Dropped: sc.Dropped, MaxDiffBytes: cfg.Review.MaxDiffBytes, Gaps: gaps(sc, rules),
 	}
 	if snap.Commit, err = commitPackage(ctx, repo, snap, p); err != nil {
 		return ExportResult{}, err
@@ -177,6 +196,7 @@ func Export(ctx context.Context, s *run.Store, repo vcs.Repo, cfg config.Review)
 		}
 		st.Snapshots = append(st.Snapshots, run.Snapshot{
 			N: n, Commit: snap.Commit, Tree: snap.Tree, Base: snap.Base, Head: snap.Head, CreatedAt: s.Now().UTC(),
+			CoverageGaps: p.Gaps,
 		})
 	}
 	if !reused || st.Step == run.StepTaskSaved {
@@ -189,7 +209,7 @@ func Export(ctx context.Context, s *run.Store, repo vcs.Repo, cfg config.Review)
 		path = rel
 	}
 	return ExportResult{
-		Run: st.ID, Snapshot: n, Commit: snap.Commit, Base: snap.Base, Coverage: p.Coverage,
+		Run: st.ID, Snapshot: n, Commit: snap.Commit, Base: snap.Base, Coverage: p.Coverage, Gaps: p.Gaps,
 		Package: filepath.ToSlash(path), Changed: !reused, Step: st.Step,
 	}, nil
 }

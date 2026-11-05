@@ -176,7 +176,7 @@ func exported(t *testing.T) (string, *run.Store, vcs.Repo, review.ExportResult) 
 		Source: task.DefaultSource}); err != nil {
 		t.Fatal(err)
 	}
-	exp, err := review.Export(t.Context(), s, repo, config.Review{})
+	exp, err := review.Export(t.Context(), s, repo, config.Config{})
 	if err != nil {
 		t.Fatal(err)
 	}

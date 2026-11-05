@@ -4,6 +4,7 @@ package vcs
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -20,8 +21,12 @@ const (
 	snapshotMsg   = "plait snapshot"
 	identityName  = "plait"
 	identityEmail = "plait@localhost"
+	numstatFields = 3
 	baseFix       = "pass --base <branch> to plait review export or set review.base in .plait/config.yaml"
 )
+
+// literalPathspecs keeps file names with glob characters from matching other files.
+var literalPathspecs = []string{"GIT_LITERAL_PATHSPECS=1"} //nolint:gochecknoglobals // constant env slice
 
 // Repo is a git repository rooted at Root.
 type Repo struct {
@@ -139,9 +144,55 @@ func (r Repo) SetRef(ctx context.Context, ref, commit string) error {
 	return err
 }
 
-// Diff returns the unified diff from base to a commit or tree.
-func (r Repo) Diff(ctx context.Context, base, to string) (string, error) {
-	return r.git(ctx, nil, "diff", "--no-color", "--no-ext-diff", base, to, "--")
+// FileDiff is the unified diff of one file; OldPath is set for a rename.
+type FileDiff struct {
+	Path    string
+	OldPath string
+	Diff    string
+}
+
+// DiffFiles returns the diff from base to a commit or tree file by file, in git's order, with renames detected.
+func (r Repo) DiffFiles(ctx context.Context, base, to string) ([]FileDiff, error) {
+	out, err := r.git(ctx, literalPathspecs, "diff", "-M", "--numstat", "-z", base, to, "--")
+	if err != nil {
+		return nil, err
+	}
+	files, err := parseNumstat(out)
+	if err != nil {
+		return nil, err
+	}
+	for i, f := range files {
+		args := []string{"diff", "--no-color", "--no-ext-diff", "-M", base, to, "--", f.Path}
+		if f.OldPath != "" {
+			args = append(args, f.OldPath)
+		}
+		if files[i].Diff, err = r.git(ctx, literalPathspecs, args...); err != nil {
+			return nil, err
+		}
+	}
+	return files, nil
+}
+
+// parseNumstat reads "added\tdeleted\tpath\0" records; a rename has an empty path followed by "old\0new\0".
+func parseNumstat(out string) ([]FileDiff, error) {
+	tokens := strings.Split(strings.TrimSuffix(out, "\x00"), "\x00")
+	files := []FileDiff{}
+	for i := 0; i < len(tokens) && tokens[i] != ""; i++ {
+		fields := strings.SplitN(tokens[i], "\t", numstatFields)
+		if len(fields) != numstatFields {
+			return nil, output.Internal(fmt.Errorf("git diff --numstat: unexpected record %q", tokens[i]))
+		}
+		if fields[2] != "" {
+			files = append(files, FileDiff{Path: fields[2]})
+			continue
+		}
+		if i+2 >= len(tokens) {
+			return nil, output.Internal(errors.New("git diff --numstat: truncated rename record"))
+		}
+		files = append(files, FileDiff{OldPath: tokens[i+1], Path: tokens[i+2]})
+		i += 2
+	}
+	return files, nil
 }
 
 func (r Repo) head(ctx context.Context) (string, error) {

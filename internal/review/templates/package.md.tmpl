@@ -5,6 +5,12 @@ You are the reviewer in a fresh session. You did not write this change and you d
 - Snapshot: `{{.Commit}}`
 - Base: `{{.Base}}`
 - Coverage: `{{.Coverage}}`
+{{- if .Gaps}}
+- Coverage gaps:
+{{- range .Gaps}}
+  - `{{.Code}}`:{{range $i, $item := .Items}}{{if $i}},{{end}} `{{$item}}`{{end}}
+{{- end}}
+{{- end}}
 {{- if eq .Coverage "criteria"}}
 
 Check that the diff meets every acceptance criterion of the task, then look for defects and violations of the repository rules. A finding that breaks a criterion quotes it in `criterion`.
@@ -22,7 +28,7 @@ The task has no acceptance criteria, so only the diff is checked: look for defec
 
 ### {{.Path}}
 
-{{fence .Content "markdown"}}
+{{if .Excluded}}Excluded by audit.deny_globs: not shown to you.{{else}}{{fence .Content "markdown"}}{{end}}
 {{- else}}
 
 No rule files in this repository.
@@ -33,6 +39,16 @@ No rule files in this repository.
 `git diff {{.Base}} {{.Commit}}`
 
 {{fence .Diff "diff"}}
+{{- if or .Excluded .Dropped}}
+
+These files changed but their diff is left out; do not guess what changed in them:
+{{range .Excluded}}
+- `{{.}}`: excluded by audit.deny_globs
+{{- end}}
+{{- range .Dropped}}
+- `{{.}}`: dropped, the diff is over review.max_diff_bytes ({{$.MaxDiffBytes}})
+{{- end}}
+{{- end}}
 
 ## Answer
 

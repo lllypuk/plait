@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -22,12 +23,18 @@ var update = flag.Bool( //nolint:gochecknoglobals // go test -update flag
 	"update", false, "rewrite golden files")
 
 const (
-	commitID = "0123456789abcdef0123456789abcdef01234567"
-	baseID   = "89abcdef0123456789abcdef0123456789abcdef"
-	agentsMD = "AGENTS.md"
-	claudeMD = "CLAUDE.md"
-	plaitMD  = ".plait/rules.md"
-	diffText = "diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-a\n+a changed\n"
+	commitID      = "0123456789abcdef0123456789abcdef01234567"
+	baseID        = "89abcdef0123456789abcdef0123456789abcdef"
+	agentsMD      = "AGENTS.md"
+	claudeMD      = "CLAUDE.md"
+	plaitMD       = ".plait/rules.md"
+	envFile       = ".env"
+	pemGlob       = "**/*.pem"
+	nestedDirGlob = "**/secrets/**"
+	badGlob       = "[bad"
+	docsDir       = "docs"
+	bigGo         = "big.go"
+	diffText      = "diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-a\n+a changed\n"
 )
 
 func TestRenderGolden(t *testing.T) {
@@ -64,6 +71,29 @@ func TestRenderGolden(t *testing.T) {
 				Diff:     diffText,
 			},
 		},
+		{
+			"scoped",
+			review.Package{
+				Run:      "2026-11-05-order-retry",
+				N:        1,
+				Commit:   commitID,
+				Base:     baseID,
+				Coverage: review.CoverageCriteria,
+				Task:     "# Retry failed orders\n\n## Acceptance criteria\n\n- retried 3 times\n",
+				Rules: []review.Rule{
+					{Path: agentsMD, Content: "Run make check.\n"},
+					{Path: envFile, Excluded: true},
+				},
+				Diff:         diffText,
+				Excluded:     []string{"config/.env", "certs/server.pem"},
+				Dropped:      []string{"testdata/big.json"},
+				MaxDiffBytes: 1024,
+				Gaps: []run.Gap{
+					{Code: review.GapDiffTruncated, Items: []string{"testdata/big.json"}},
+					{Code: review.GapFilesExcluded, Items: []string{"config/.env", "certs/server.pem", envFile}},
+				},
+			},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -92,11 +122,11 @@ func TestLoadRules(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, agentsMD, "agents\n")
 	write(t, root, plaitMD, "plait rules\n")
-	if err := os.Mkdir(filepath.Join(root, "docs"), 0o750); err != nil {
+	if err := os.Mkdir(filepath.Join(root, docsDir), 0o750); err != nil {
 		t.Fatal(err)
 	}
 
-	rules, err := review.LoadRules(root, []string{agentsMD, claudeMD, plaitMD, "./AGENTS.md"})
+	rules, err := review.LoadRules(root, []string{agentsMD, claudeMD, plaitMD, "./AGENTS.md"}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,17 +135,27 @@ func TestLoadRules(t *testing.T) {
 		t.Errorf("rules = %+v", rules)
 	}
 
-	rules, err = review.LoadRules(root, []string{claudeMD})
+	rules, err = review.LoadRules(root, []string{claudeMD}, nil)
 	if err != nil || len(rules) != 0 {
 		t.Errorf("no rule files: rules = %+v, err = %v", rules, err)
 	}
 
 	for _, p := range []string{"../outside.md", "/etc/passwd", ""} {
-		_, err = review.LoadRules(root, []string{p})
+		_, err = review.LoadRules(root, []string{p}, nil)
 		wantInvalid(t, err, "rule_outside_repo")
 	}
-	_, err = review.LoadRules(root, []string{"docs"})
+	_, err = review.LoadRules(root, []string{docsDir}, nil)
 	wantInvalid(t, err, "rule_unreadable")
+
+	// docs is a directory: reading it would fail, so success means the denied path was not read.
+	rules, err = review.LoadRules(root, []string{docsDir, agentsMD, ".plait/missing.md"},
+		[]string{docsDir, ".plait/**"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rules) != 2 || rules[0] != (review.Rule{Path: docsDir, Excluded: true}) || rules[1].Path != agentsMD {
+		t.Errorf("rules with deny globs = %+v", rules)
+	}
 }
 
 func TestExport(t *testing.T) {
@@ -129,7 +169,7 @@ func TestExport(t *testing.T) {
 	s := run.Open(dir)
 	s.Now = func() time.Time { return time.Date(2026, 11, 5, 10, 0, 0, 0, time.UTC) }
 	repo := vcs.Repo{Root: dir}
-	cfg := config.Review{Rules: []string{agentsMD, claudeMD}}
+	cfg := config.Config{Review: config.Review{Rules: []string{agentsMD, claudeMD}}}
 
 	if _, _, err := s.New("order-retry", ""); err != nil {
 		t.Fatal(err)
@@ -203,7 +243,7 @@ func TestExportNewTaskSameTree(t *testing.T) {
 		}
 	}
 	save("# Retry\n")
-	first, err := review.Export(t.Context(), s, repo, config.Review{})
+	first, err := review.Export(t.Context(), s, repo, config.Config{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,7 +251,7 @@ func TestExportNewTaskSameTree(t *testing.T) {
 		t.Errorf("coverage = %s, want diff_only", first.Coverage)
 	}
 	save("# Retry\n\n## Acceptance criteria\n\n- 3 times\n")
-	second, err := review.Export(t.Context(), s, repo, config.Review{})
+	second, err := review.Export(t.Context(), s, repo, config.Config{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,6 +260,65 @@ func TestExportNewTaskSameTree(t *testing.T) {
 	}
 	_, err = review.Import(t.Context(), s, repo, answer(first.Commit, review.CoverageCriteria), "-")
 	wantInvalid(t, err, "snapshot_mismatch")
+}
+
+func TestExportScope(t *testing.T) {
+	dir := newRepo(t)
+	write(t, dir, envFile, "TOKEN=old\n")
+	git(t, dir, "add", "-A")
+	git(t, dir, "commit", "-q", "-m", "env")
+	git(t, dir, "checkout", "-q", "-b", "feature")
+	write(t, dir, "a.txt", "a changed\n")
+	write(t, dir, envFile, "TOKEN=SECRET-MARKER\n")
+	write(t, dir, "keys/server.pem", "PEM-MARKER\n")
+	write(t, dir, "big.json", strings.Repeat("{\"big\": true}\n", 200))
+
+	s := run.Open(dir)
+	repo := vcs.Repo{Root: dir}
+	if _, _, err := s.New("order-retry", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := task.Save(s, task.Input{Text: []byte("# Retry\n"), Source: task.DefaultSource}); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Config{
+		Review: config.Review{Rules: []string{envFile}, MaxDiffBytes: 1024},
+		Audit:  config.Audit{DenyGlobs: []string{envFile, pemGlob}},
+	}
+	res, err := review.Export(t.Context(), s, repo, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkg := read(t, filepath.Join(dir, res.Package))
+	for _, leak := range []string{"SECRET-MARKER", "TOKEN=old", "PEM-MARKER", `{"big": true}`} {
+		if strings.Contains(pkg, leak) {
+			t.Errorf("package leaks %q", leak)
+		}
+	}
+	for _, want := range []string{"+a changed", "`big.json`: dropped", "`.env`: excluded by audit.deny_globs",
+		"`keys/server.pem`: excluded"} {
+		if !strings.Contains(pkg, want) {
+			t.Errorf("package lacks %q", want)
+		}
+	}
+	wantGaps := []run.Gap{
+		{Code: review.GapDiffTruncated, Items: []string{"big.json"}},
+		{Code: review.GapFilesExcluded, Items: []string{envFile, "keys/server.pem"}},
+	}
+	if !reflect.DeepEqual(res.Gaps, wantGaps) {
+		t.Errorf("gaps = %+v, want %+v", res.Gaps, wantGaps)
+	}
+	st, err := s.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(st.Snapshots[0].CoverageGaps, wantGaps) {
+		t.Errorf("state gaps = %+v", st.Snapshots[0].CoverageGaps)
+	}
+
+	cfg.Audit.DenyGlobs = []string{badGlob}
+	_, err = review.Export(t.Context(), s, repo, cfg)
+	wantInvalid(t, err, "config_invalid")
 }
 
 func checkPackage(t *testing.T, pkg, commit string) {

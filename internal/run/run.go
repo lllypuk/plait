@@ -66,12 +66,19 @@ type Task struct {
 
 // Snapshot is a working-copy snapshot under refs/plait/snapshots.
 type Snapshot struct {
-	N         int       `json:"n"`
-	Commit    string    `json:"commit"`
-	Tree      string    `json:"tree"`
-	Base      string    `json:"base"`
-	Head      string    `json:"head"`
-	CreatedAt time.Time `json:"created_at"`
+	N            int       `json:"n"`
+	Commit       string    `json:"commit"`
+	Tree         string    `json:"tree"`
+	Base         string    `json:"base"`
+	Head         string    `json:"head"`
+	CreatedAt    time.Time `json:"created_at"`
+	CoverageGaps []Gap     `json:"coverage_gaps,omitempty"`
+}
+
+// Gap is a part of the change the review could not see: Code names the kind, Items the paths or names.
+type Gap struct {
+	Code  string   `json:"code"`
+	Items []string `json:"items"`
 }
 
 // Review is an imported review result.
