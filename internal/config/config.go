@@ -15,6 +15,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
+	"github.com/lllypuk/plait/internal/agent"
 	"github.com/lllypuk/plait/internal/output"
 )
 
@@ -28,6 +29,8 @@ type Config struct {
 	Review Review `yaml:"review"`
 	Audit  Audit  `yaml:"audit"`
 	MR     MR     `yaml:"mr"`
+	// Agents holds raw plait-agent/v1 descriptors; agent.Load resolves them, env and flags do not set them.
+	Agents map[string]map[string]any `yaml:"agents"`
 }
 
 // Review configures review export.
@@ -132,10 +135,13 @@ func loadFile(path string, cfg *Config) error {
 	if err != nil {
 		return output.Internal(fmt.Errorf("read config %s: %w", path, err))
 	}
+	lower := cfg.Agents
+	cfg.Agents = nil
 	if err = yaml.Unmarshal(b, cfg); err != nil {
 		fix := "fix " + path + " or remove it, then rerun the command"
 		return invalid(fmt.Sprintf("config %s: %v", path, err), fix, err)
 	}
+	cfg.Agents = agent.Merge(lower, cfg.Agents)
 	return nil
 }
 
@@ -145,7 +151,7 @@ func invalid(msg, fix string, err error) error {
 	return e
 }
 
-// leaves maps dotted yaml keys to the non-struct fields of v.
+// leaves maps dotted yaml keys to the non-struct, non-map fields of v.
 func leaves(v reflect.Value, prefix string, out map[string]reflect.Value) {
 	t := v.Type()
 	for i := range t.NumField() {
@@ -153,9 +159,11 @@ func leaves(v reflect.Value, prefix string, out map[string]reflect.Value) {
 		if name == "" || name == "-" {
 			continue
 		}
-		if f := v.Field(i); f.Kind() == reflect.Struct {
+		switch f := v.Field(i); f.Kind() { //nolint:exhaustive // other kinds are leaves
+		case reflect.Struct:
 			leaves(f, prefix+name+".", out)
-		} else {
+		case reflect.Map:
+		default:
 			out[prefix+name] = f
 		}
 	}

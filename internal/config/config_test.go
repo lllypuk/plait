@@ -305,3 +305,38 @@ func TestLoadNewListAndStringKeys(t *testing.T) {
 		t.Errorf("mr.template = %q", cfg.MR.Template)
 	}
 }
+
+func TestLoadAgentsMergeAcrossLayers(t *testing.T) {
+	cfg, err := config.Load(sources(t, layers{
+		system: "agents:\n  sandbox:\n    base: claude\n    cmd: sys-sandbox\n    skill_dirs: { user: ~/.sys/skills }\n" +
+			"    telemetry_off: [{env: A}, {env: B}]\n",
+		repo: "agents:\n  sandbox:\n    cmd: repo-sandbox\n    telemetry_off: [{env: C}]\n  qwen:\n    cmd: q\n",
+		env:  []string{"PLAIT_AGENTS=ignored"},
+	}))
+	if err != nil {
+		t.Fatalf("config.Load: %v", err)
+	}
+	sb := cfg.Agents["sandbox"]
+	if sb["base"] != "claude" || sb["cmd"] != "repo-sandbox" {
+		t.Fatalf("agents.sandbox = %v", sb)
+	}
+	if dirs, _ := sb["skill_dirs"].(map[string]any); dirs["user"] != "~/.sys/skills" {
+		t.Fatalf("agents.sandbox.skill_dirs = %v", sb["skill_dirs"])
+	}
+	if tel, _ := sb["telemetry_off"].([]any); len(tel) != 1 {
+		t.Fatalf("telemetry_off not replaced by the upper layer: %v", sb["telemetry_off"])
+	}
+	if cfg.Agents["qwen"]["cmd"] != "q" {
+		t.Fatalf("agents.qwen = %v", cfg.Agents["qwen"])
+	}
+}
+
+func TestLoadAgentsDefaultEmpty(t *testing.T) {
+	cfg, err := config.Load(sources(t, layers{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Agents) != 0 {
+		t.Fatalf("agents = %v, want none", cfg.Agents)
+	}
+}

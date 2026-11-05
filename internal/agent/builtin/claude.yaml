@@ -1,0 +1,19 @@
+name: claude
+display: Claude Code
+cmd: claude
+version_args: [--version]
+skill_dirs: { user: ~/.claude/skills, project: .claude/skills }
+context_file: CLAUDE.md
+skill_frontmatter: { disable-model-invocation: true }
+permissions:
+  writer: claude-settings
+  user: ~/.claude/settings.json
+  project: .claude/settings.json
+  deny: [plait approve, plait reject]
+  source: https://docs.anthropic.com/en/docs/claude-code/settings#permission-settings
+telemetry_off:
+  - env: DISABLE_TELEMETRY
+  - env: CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC
+  - json: { file: ~/.claude/settings.json, path: env.DISABLE_TELEMETRY }
+  - json: { file: ~/.claude/settings.json, path: env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC }
+model_endpoint_env: ANTHROPIC_BASE_URL

@@ -11,3 +11,6 @@ audit:
 mr:
   # Repository path to a custom text/template; empty uses the built-in one.
   template: ""
+# Agents in plait-agent/v1 by name: override a built-in one (claude, qwen) field by field,
+# or describe a new one; base: <agent> takes another agent's fields first.
+agents: {}

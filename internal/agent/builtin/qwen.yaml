@@ -1,0 +1,12 @@
+name: qwen
+display: Qwen Code
+cmd: qwen
+version_args: [--version]
+skill_dirs: { user: ~/.qwen/skills, project: .qwen/skills }
+context_file: QWEN.md
+permissions:
+  writer: none
+telemetry_off:
+  - json: { file: ~/.qwen/settings.json, path: privacy.usageStatisticsEnabled, equals: false }
+  - json: { file: ~/.qwen/settings.json, path: usageStatisticsEnabled, equals: false }
+model_endpoint_env: OPENAI_BASE_URL

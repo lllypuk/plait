@@ -1,0 +1,11 @@
+name: third
+display: Third Agent
+cmd: third-cli
+skill_dirs: { user: ~/.third/skills, project: .third/skills }
+context_file: THIRD.md
+permissions:
+  writer: claude-settings
+  user: ~/.third/settings.json
+  project: .third/settings.json
+  deny: [plait approve, plait reject]
+model_endpoint_env: THIRD_BASE_URL
