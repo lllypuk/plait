@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -168,7 +169,7 @@ func Export(ctx context.Context, s *run.Store, repo vcs.Repo, cfg config.Config)
 		return ExportResult{}, err
 	}
 	p.Run, p.Coverage, p.Task = st.ID, coverage(st.Task), string(taskMD)
-	if p.Previous, err = previousFindings(ctx, repo, st, runDir, snap.Tree); err != nil {
+	if p.Previous, err = previousFindings(ctx, repo, st, runDir, snap.Tree, math.MaxInt); err != nil {
 		return ExportResult{}, err
 	}
 	if snap.Commit, err = commitPackage(ctx, repo, snap, p); err != nil {

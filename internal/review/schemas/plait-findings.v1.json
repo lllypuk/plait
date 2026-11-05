@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/lllypuk/plait/schemas/plait-findings.v1.json",
+  "title": "plait-findings/v1",
+  "description": "Findings of review n with their status between runs; written by plait review import.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "run", "review", "snapshot", "findings"],
+  "properties": {
+    "schema": {"const": "plait-findings/v1"},
+    "run": {"type": "string", "minLength": 1},
+    "review": {"type": "integer", "minimum": 1},
+    "snapshot": {"type": "string", "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$"},
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "severity", "file", "line", "state", "title", "rationale", "status", "history"],
+        "properties": {
+          "key": {"type": "string", "pattern": "^R[1-9][0-9]*-[A-Za-z0-9][A-Za-z0-9_.-]*$"},
+          "severity": {"enum": ["blocker", "major", "minor", "nit"]},
+          "file": {"description": "Path in snapshot n; for state gone, the last known path.", "type": "string", "minLength": 1},
+          "line": {"description": "Line in snapshot n; 0 for the whole file.", "type": "integer", "minimum": 0},
+          "state": {"description": "What happened to the line since the previous review.", "enum": ["unchanged", "changed", "gone"]},
+          "title": {"type": "string", "minLength": 1},
+          "rationale": {"type": "string", "minLength": 1},
+          "criterion": {"type": "string", "minLength": 1},
+          "status": {"enum": ["new", "fix_confirmed", "open", "region_changed", "outdated"]},
+          "history": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["review", "status"],
+              "properties": {
+                "review": {"type": "integer", "minimum": 1},
+                "status": {"enum": ["new", "fix_confirmed", "open", "region_changed", "outdated"]},
+                "verdict": {"enum": ["fixed", "still_open", "not_checked"]},
+                "note": {"type": "string", "minLength": 1},
+                "duplicate": {"description": "Key of the new finding merged into this one.", "type": "string"}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

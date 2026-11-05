@@ -2,12 +2,7 @@ package review
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"io/fs"
-	"os"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -27,14 +22,11 @@ const (
 // GapCriteriaUnchecked lists the acceptance criteria the reviewer could not check from the diff.
 const GapCriteriaUnchecked = "criteria_unchecked"
 
-// Previous is an open finding of an earlier review placed in the new snapshot.
+// Previous is a carried finding of an earlier review, as that review left it, placed At the new snapshot.
 type Previous struct {
-	Key       string
-	Severity  string
-	Title     string
-	Rationale string
-	Criterion string
-	At        vcs.Location
+	Tracked
+
+	At vcs.Location
 }
 
 // Where renders the place of the finding in the new snapshot.
@@ -66,49 +58,42 @@ func Key(n int, id string) string {
 	return "R" + strconv.Itoa(n) + "-" + id
 }
 
-// previousFindings places the findings of the last imported review in tree.
-func previousFindings(ctx context.Context, repo vcs.Repo, st *run.State, runDir, tree string) ([]Previous, error) {
-	if len(st.Reviews) == 0 {
+// previousFindings places the carried findings of the last review imported before snapshot n in tree.
+func previousFindings(
+	ctx context.Context, repo vcs.Repo, st *run.State, runDir, tree string, n int,
+) ([]Previous, error) {
+	last := -1
+	for i, r := range st.Reviews {
+		if r.N < n && (last < 0 || r.N > st.Reviews[last].N) {
+			last = i
+		}
+	}
+	if last < 0 {
 		return nil, nil
 	}
-	last := slices.MaxFunc(st.Reviews, func(a, b run.Review) int { return a.N - b.N })
-	i := slices.IndexFunc(st.Snapshots, func(s run.Snapshot) bool { return s.N == last.N })
+	m := st.Reviews[last].N
+	i := slices.IndexFunc(st.Snapshots, func(s run.Snapshot) bool { return s.N == m })
 	if i < 0 {
-		return nil, output.Internal(fmt.Errorf("review %d has no snapshot in run %s", last.N, st.ID))
+		return nil, output.Internal(fmt.Errorf("review %d has no snapshot in run %s", m, st.ID))
 	}
-	a, err := readAnswer(filepath.Join(runDir, "review-"+strconv.Itoa(last.N)+".json"))
+	f, err := readTracked(trackedPath(runDir, m))
 	if err != nil {
 		return nil, err
 	}
-	prev := make([]Previous, 0, len(a.Findings))
-	for _, f := range a.Findings {
-		at, mapErr := repo.MapLine(ctx, st.Snapshots[i].Tree, tree, f.File, f.Line)
-		if mapErr != nil {
-			return nil, mapErr
+	prev := make([]Previous, 0, len(f.Findings))
+	for _, t := range f.Findings {
+		if !t.Carried() {
+			continue
 		}
-		prev = append(prev, Previous{
-			Key: Key(last.N, f.ID), Severity: f.Severity, Title: f.Title, Rationale: f.Rationale,
-			Criterion: f.Criterion, At: at,
-		})
+		at := vcs.Location{State: vcs.LineGone}
+		if t.State != vcs.LineGone {
+			if at, err = repo.MapLine(ctx, st.Snapshots[i].Tree, tree, t.File, t.Line); err != nil {
+				return nil, err
+			}
+		}
+		prev = append(prev, Previous{Tracked: t, At: at})
 	}
 	return prev, nil
-}
-
-func readAnswer(path string) (Answer, error) {
-	b, err := os.ReadFile(filepath.Clean(path))
-	if errors.Is(err, fs.ErrNotExist) {
-		return Answer{}, output.NeedsHuman("review_missing", "imported review "+path+" is missing",
-			"stop and ask a human to restore "+path+" or import that review again")
-	}
-	if err != nil {
-		return Answer{}, output.Internal(fmt.Errorf("read %s: %w", path, err))
-	}
-	var a Answer
-	if err = json.Unmarshal(b, &a); err != nil {
-		return Answer{}, output.NeedsHuman("review_corrupt", fmt.Sprintf("%s is not valid JSON: %v", path, err),
-			"stop and ask a human to repair or remove "+path)
-	}
-	return a, nil
 }
 
 // bindVerdicts rejects verdicts on keys the package did not list and returns one verdict per listed key,

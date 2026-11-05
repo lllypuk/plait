@@ -165,12 +165,20 @@ func Import(ctx context.Context, s *run.Store, repo vcs.Repo, data []byte, name 
 	if a.Previous, err = bindVerdicts(a.Previous, snap.Previous, pkg, name); err != nil {
 		return ImportResult{}, err
 	}
+	prev, err := previousFindings(ctx, repo, st, runDir, snap.Tree, snap.N)
+	if err != nil {
+		return ImportResult{}, err
+	}
+	tracked, err := encodeTracked(st, snap, Compare(snap.N, prev, a.Previous, a.Findings))
+	if err != nil {
+		return ImportResult{}, err
+	}
 	tree, err := repo.CurrentTree(ctx)
 	if err != nil {
 		return ImportResult{}, err
 	}
 	path := filepath.Join(runDir, "review-"+strconv.Itoa(snap.N)+".json")
-	changed, err := saveAnswer(s, st, snap, a, path)
+	changed, err := saveAnswer(s, st, snap, a, path, tracked)
 	if err != nil {
 		return ImportResult{}, err
 	}
@@ -183,8 +191,9 @@ func Import(ctx context.Context, s *run.Store, repo vcs.Repo, data []byte, name 
 	}, nil
 }
 
-// saveAnswer writes the answer before state.json, so a crash between them is repaired by importing again.
-func saveAnswer(s *run.Store, st *run.State, snap run.Snapshot, a Answer, path string) (bool, error) {
+// saveAnswer writes the answer, then its compared findings, then state.json, so a crash between them
+// is repaired by importing again.
+func saveAnswer(s *run.Store, st *run.State, snap run.Snapshot, a Answer, path string, tracked []byte) (bool, error) {
 	b, err := json.MarshalIndent(a, "", "  ")
 	if err != nil {
 		return false, output.Internal(fmt.Errorf("encode answer: %w", err))
@@ -196,7 +205,7 @@ func saveAnswer(s *run.Store, st *run.State, snap run.Snapshot, a Answer, path s
 	case err != nil && !errors.Is(err, fs.ErrNotExist):
 		return false, output.Internal(fmt.Errorf("read %s: %w", path, err))
 	case err == nil && i >= 0 && bytes.Equal(old, b):
-		return false, nil
+		return false, writeTracked(trackedPath(s.RunDir(st.ID), snap.N), tracked)
 	case err == nil && i >= 0:
 		return false, output.NeedsHuman("review_exists",
 			fmt.Sprintf("snapshot %d already has a different imported review %s", snap.N, path),
@@ -205,6 +214,9 @@ func saveAnswer(s *run.Store, st *run.State, snap run.Snapshot, a Answer, path s
 	}
 	if err = run.WriteFile(path, b); err != nil {
 		return false, output.Internal(err)
+	}
+	if err = writeTracked(trackedPath(s.RunDir(st.ID), snap.N), tracked); err != nil {
+		return false, err
 	}
 	rec := run.Review{N: snap.N, Snapshot: snap.Commit, ImportedAt: s.Now().UTC(), Coverage: a.Coverage}
 	if len(a.UncheckedCriteria) > 0 {
