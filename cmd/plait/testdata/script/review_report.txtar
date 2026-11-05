@@ -21,10 +21,10 @@ stdout '"code":"no_review".*"fix":"review the exported package.md in a fresh ses
 
 exec plait review import ../answer-ok.json --json
 exec plait review report --json
-stdout '"coverage":"diff_only","coverage_label":"only the diff was checked: the task has no acceptance criteria","stale":false'
-stdout '"counts":\{"blocker":1,"major":0,"minor":0,"nit":1\},"findings":\[\{"id":"F2".*\{"id":"F1".*"step":"reported"'
+stdout '"coverage":"diff_only","coverage_label":"only the diff was checked: the task has no acceptance criteria","coverage_gaps":\[\],"stale":false'
+stdout '"counts":\{"new":2,"open":0,"region_changed":0,"outdated":0,"fix_confirmed":0\},"blocking":1,"findings":\[\{"key":"R1-F2".*\{"key":"R1-F1".*"step":"reported"'
 exec plait next --json
-stdout '"step":"reported"'
+stdout '"step":"reported".*"output":\{"cmd":"plait review export"\}'
 
 # a repeat report changes nothing; a change after the snapshot marks it stale
 exec plait review report --json

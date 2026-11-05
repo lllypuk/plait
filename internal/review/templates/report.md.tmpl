@@ -8,16 +8,33 @@
 
 **Stale:** the working copy changed after snapshot {{.Snapshot}}, so the findings describe the code as it was then. Run `plait review export` for a review of the current code.
 {{- end}}
+{{- if .CoverageGaps}}
 
-## Findings: {{.Counts.Blocker}} blocker, {{.Counts.Major}} major, {{.Counts.Minor}} minor, {{.Counts.Nit}} nit
+## Coverage gaps
+{{range .CoverageGaps}}
+- {{gap .}}
+{{- range items .}}
+  - {{.}}
+{{- end}}
+{{- end}}
+{{- end}}
+
+## Findings: {{.Counts.New}} new, {{.Counts.Open}} open, {{.Counts.RegionChanged}} region changed, {{.Counts.Outdated}} outdated, {{.Counts.FixConfirmed}} fix confirmed
+{{- if .Findings}}
+
+Unresolved blocker or major: {{.Blocking}}.
+{{- end}}
 {{- range .Groups}}
 
-### {{title .Severity}}
+### {{.Heading}}
 {{range .Findings}}
-- **{{.ID}}** `{{.File}}:{{.Line}}` {{.Title}}
+- **{{.Key}}** {{.Severity}}: {{.Title}} at {{.Where}}
   {{indent .Rationale}}
 {{- if .Criterion}}
   Criterion: {{indent .Criterion}}
+{{- end}}
+{{- if .Note}}
+  Reviewer: {{indent .Note}}
 {{- end}}
 {{- end}}
 {{- else}}

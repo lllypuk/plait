@@ -26,7 +26,7 @@ exec plait review report --json
 stdout '"stale":true'
 stdout '"step":"reported"'
 exec plait next --json
-stdout '"step":"reported".*"output":\{"cmd":"plait review export"\}'
+stdout '"step":"reported".*"output":\{"cmd":"plait mr describe"\}'
 
 # the next export takes a fresh snapshot of the edit
 exec plait review export --json

@@ -6,34 +6,66 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/lllypuk/plait/internal/output"
 	"github.com/lllypuk/plait/internal/review"
 	"github.com/lllypuk/plait/internal/run"
+	"github.com/lllypuk/plait/internal/vcs"
 )
 
 func TestReportGolden(t *testing.T) {
-	snap := run.Snapshot{N: 2, Commit: commitID, Base: baseID}
+	first := review.Compare(1, nil, nil, []review.Finding{
+		{ID: "F1", Severity: "nit", File: "a.go", Line: 3, Title: "typo in name", Rationale: "retires, not retries"},
+		{ID: "F2", Severity: "blocker", File: "b.go", Line: 10, Title: "no retry",
+			Rationale: "the order fails at once\nafter the first error", Criterion: criterion},
+		{ID: "F3", Severity: sevMajor, File: "b.go", Line: 12, Title: "error ignored", Rationale: "err is dropped"},
+		{ID: "F4", Severity: "blocker", File: "c.go", Line: 1, Title: "panic", Rationale: "nil map"},
+	})
+	at := func(file string, line int, state vcs.LineState) vcs.Location {
+		return vcs.Location{File: file, Line: line, State: state}
+	}
+	second := review.Compare(2, []review.Previous{
+		{Tracked: first[0], At: at("a.go", 3, vcs.LineUnchanged)},
+		{Tracked: first[1], At: at("b.go", 14, vcs.LineUnchanged)},
+		{Tracked: first[2], At: at("b.go", 15, vcs.LineChanged)},
+		{Tracked: first[3], At: at("", 0, vcs.LineGone)},
+	}, []review.Verdict{
+		{Key: "R1-F1", Verdict: review.VerdictStillOpen, Note: "still misspelt\nin the log line"},
+		{Key: "R1-F2", Verdict: review.VerdictFixed, Note: "retried in a loop now"},
+		{Key: "R1-F3", Verdict: review.VerdictNotChecked},
+	}, []review.Finding{
+		{ID: "F1", Severity: sevMajor, File: "d.go", Line: 0, Title: "no tests", Rationale: "the retry is untested"},
+	})
+	gaps := []run.Gap{
+		{Code: review.GapDiffTruncated, Items: []string{"gen/big.go", "gen/huge.go"}},
+		{Code: review.GapFilesExcluded, Items: []string{".env"}},
+		{Code: review.GapChecksMissing, Items: []string{checkTest}},
+		{Code: review.GapChecksFailed, Items: []string{"lint"}},
+		{Code: review.GapChecksStale, Items: []string{"vet"}},
+	}
+	unchecked := []run.Gap{{Code: review.GapCriteriaUnchecked, Items: []string{criterion}}}
 	cases := []struct {
-		name  string
-		a     review.Answer
-		stale bool
+		name    string
+		snap    run.Snapshot
+		rev     run.Review
+		tracked []review.Tracked
+		stale   bool
 	}{
-		{"criteria", review.Answer{Snapshot: commitID, Coverage: review.CoverageCriteria, Findings: []review.Finding{
-			{ID: "F1", Severity: "nit", File: "a.go", Line: 3, Title: "typo in name",
-				Rationale: "retires, not retries"},
-			{ID: "F2", Severity: "blocker", File: "b.go", Line: 10, Title: "no retry",
-				Rationale: "the order fails at once\nafter the first error", Criterion: "retried 3 times"},
-			{ID: "F3", Severity: "major", File: "b.go", Line: 12, Title: "error ignored", Rationale: "err is dropped"},
-			{ID: "F4", Severity: "blocker", File: "c.go", Line: 1, Title: "panic", Rationale: "nil map"},
-		}}, false},
-		{"diff_only-stale-empty", review.Answer{Snapshot: commitID, Coverage: review.CoverageDiffOnly}, true},
+		{"first", run.Snapshot{N: 1, Commit: commitID, Base: baseID},
+			run.Review{N: 1, Coverage: review.CoverageCriteria}, first, false},
+		{"second", run.Snapshot{N: 2, Commit: commitID, Base: baseID, CoverageGaps: gaps},
+			run.Review{N: 2, Coverage: review.CoverageCriteria, CoverageGaps: unchecked}, second, false},
+		{"diff_only-stale-empty", run.Snapshot{N: 2, Commit: commitID, Base: baseID},
+			run.Review{N: 2, Coverage: review.CoverageDiffOnly}, nil, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			st := &run.State{ID: "PROJ-7-order-retry", Step: run.StepReported}
-			r := review.NewReport(tc.a, snap, st, ".plait/runs/PROJ-7-order-retry/review-2.json", tc.stale)
+			path := ".plait/runs/PROJ-7-order-retry/review-" + strconv.Itoa(tc.snap.N) + ".json"
+			r := review.NewReport(st, tc.snap, tc.rev, tc.tracked, path, tc.stale)
 			md, err := review.RenderReport(r)
 			if err != nil {
 				t.Fatal(err)
@@ -61,12 +93,12 @@ func TestBuildReport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Stale || r.Step != run.StepReported || r.CoverageLabel != review.LabelCriteria || r.Counts.Major != 1 ||
-		r.Review != ".plait/runs/"+exp.Run+"/review-1.json" {
+	if r.Stale || r.Step != run.StepReported || r.CoverageLabel != review.LabelCriteria || r.Counts.New != 1 ||
+		r.Blocking != 1 || r.Findings[0].Key != "R1-F1" || r.Review != ".plait/runs/"+exp.Run+"/review-1.json" {
 		t.Errorf("report = %+v", r)
 	}
-	if st, _ := s.Current(); st.Step != run.StepReported {
-		t.Errorf("step = %s, want reported", st.Step)
+	if st, _ := s.Current(); st.Step != run.StepReported || st.Reviews[0].Blocking != 1 {
+		t.Errorf("state = %+v, want reported with 1 blocking", st)
 	}
 
 	write(t, dir, "a.txt", "a changed after export\n")
@@ -74,18 +106,32 @@ func TestBuildReport(t *testing.T) {
 		t.Errorf("report after a change = %+v, err = %v, want stale", r, err)
 	}
 
+	compared := strings.Replace(r.Review, "review-1.json", "findings-1.json", 1)
+	write(t, dir, compared, `{"schema":"`+review.TrackedSchema+`","snapshot":"`+commitID+`","findings":[]}`)
+	_, err = review.BuildReport(t.Context(), s, repo)
+	wantNeedsHuman(t, err, "findings_corrupt")
+	if err = os.Remove(filepath.Join(dir, compared)); err != nil {
+		t.Fatal(err)
+	}
+	_, err = review.BuildReport(t.Context(), s, repo)
+	wantNeedsHuman(t, err, "findings_missing")
+
 	path := filepath.Join(dir, r.Review)
 	write(t, dir, r.Review, string(answer(commitID, review.CoverageCriteria)))
 	_, err = review.BuildReport(t.Context(), s, repo)
-	e, isErr := errors.AsType[*output.Error](err)
-	if !isErr || e.Kind != output.KindNeedsHuman || e.Code != "review_corrupt" {
-		t.Errorf("foreign answer: err = %#v, want NeedsHuman review_corrupt", err)
-	}
+	wantNeedsHuman(t, err, "review_corrupt")
 	if err = os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
 	_, err = review.BuildReport(t.Context(), s, repo)
 	wantInvalid(t, err, "review_missing")
+}
+
+func wantNeedsHuman(t *testing.T, err error, code string) {
+	t.Helper()
+	if e, ok := errors.AsType[*output.Error](err); !ok || e.Kind != output.KindNeedsHuman || e.Code != code {
+		t.Errorf("err = %#v, want NeedsHuman %s", err, code)
+	}
 }
 
 func golden(t *testing.T, name string, got []byte) {

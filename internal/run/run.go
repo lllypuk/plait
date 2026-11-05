@@ -90,6 +90,8 @@ type Review struct {
 	ImportedAt   time.Time `json:"imported_at"`
 	Coverage     string    `json:"coverage"`
 	CoverageGaps []Gap     `json:"coverage_gaps,omitempty"`
+	// Blocking is the number of unresolved blocker and major findings after the comparison.
+	Blocking int `json:"blocking"`
 }
 
 // Summary is one line of run list.

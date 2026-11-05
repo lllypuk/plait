@@ -24,9 +24,9 @@ expand ../answer.json ../answer-ok.json
 exec plait review import ../answer-ok.json --json
 exec plait review report --json
 stdout '"coverage":"diff_only","coverage_label":"only the diff was checked: the task has no acceptance criteria"'
-stdout '"counts":\{"blocker":0,"major":0,"minor":0,"nit":0\},"findings":\[\]'
+stdout '"coverage_gaps":\[\].*"counts":\{"new":0,"open":0,"region_changed":0,"outdated":0,"fix_confirmed":0\},"blocking":0,"findings":\[\]'
 exec plait next --json
-stdout '"step":"reported"'
+stdout '"step":"reported".*"output":\{"cmd":"plait mr describe"\}'
 
 -- a.txt --
 a

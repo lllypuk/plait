@@ -7,6 +7,6 @@
 
 **Stale:** the working copy changed after snapshot 2, so the findings describe the code as it was then. Run `plait review export` for a review of the current code.
 
-## Findings: 0 blocker, 0 major, 0 minor, 0 nit
+## Findings: 0 new, 0 open, 0 region changed, 0 outdated, 0 fix confirmed
 
 No findings.

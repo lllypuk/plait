@@ -41,8 +41,8 @@ capture INPUT '"inputs":\["([^"]+)"\]'
 grep $SNAPSHOT $INPUT
 
 exec plait review report --json
-stdout '"coverage":"criteria","coverage_label":"checked against the task''s acceptance criteria","stale":false'
-stdout '"counts":\{"blocker":0,"major":1,"minor":0,"nit":0\}.*"criterion":"retried 3 times"'
+stdout '"coverage":"criteria","coverage_label":"checked against the task''s acceptance criteria","coverage_gaps":\[\],"stale":false'
+stdout '"counts":\{"new":1,"open":0,"region_changed":0,"outdated":0,"fix_confirmed":0\},"blocking":1,.*"criterion":"retried 3 times"'
 stdout '"step":"reported"'
 exec plait next --json
 stdout '"step":"reported".*"output":\{"cmd":"plait review export"\}'

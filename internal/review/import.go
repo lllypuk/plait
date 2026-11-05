@@ -169,7 +169,8 @@ func Import(ctx context.Context, s *run.Store, repo vcs.Repo, data []byte, name 
 	if err != nil {
 		return ImportResult{}, err
 	}
-	tracked, err := encodeTracked(st, snap, Compare(snap.N, prev, a.Previous, a.Findings))
+	compared := Compare(snap.N, prev, a.Previous, a.Findings)
+	tracked, err := encodeTracked(st, snap, compared)
 	if err != nil {
 		return ImportResult{}, err
 	}
@@ -178,7 +179,7 @@ func Import(ctx context.Context, s *run.Store, repo vcs.Repo, data []byte, name 
 		return ImportResult{}, err
 	}
 	path := filepath.Join(runDir, "review-"+strconv.Itoa(snap.N)+".json")
-	changed, err := saveAnswer(s, st, snap, a, path, tracked)
+	changed, err := saveAnswer(s, st, snap, a, path, tracked, Blocking(compared))
 	if err != nil {
 		return ImportResult{}, err
 	}
@@ -193,7 +194,9 @@ func Import(ctx context.Context, s *run.Store, repo vcs.Repo, data []byte, name 
 
 // saveAnswer writes the answer, then its compared findings, then state.json, so a crash between them
 // is repaired by importing again.
-func saveAnswer(s *run.Store, st *run.State, snap run.Snapshot, a Answer, path string, tracked []byte) (bool, error) {
+func saveAnswer(
+	s *run.Store, st *run.State, snap run.Snapshot, a Answer, path string, tracked []byte, blocking int,
+) (bool, error) {
 	b, err := json.MarshalIndent(a, "", "  ")
 	if err != nil {
 		return false, output.Internal(fmt.Errorf("encode answer: %w", err))
@@ -218,7 +221,9 @@ func saveAnswer(s *run.Store, st *run.State, snap run.Snapshot, a Answer, path s
 	if err = writeTracked(trackedPath(s.RunDir(st.ID), snap.N), tracked); err != nil {
 		return false, err
 	}
-	rec := run.Review{N: snap.N, Snapshot: snap.Commit, ImportedAt: s.Now().UTC(), Coverage: a.Coverage}
+	rec := run.Review{
+		N: snap.N, Snapshot: snap.Commit, ImportedAt: s.Now().UTC(), Coverage: a.Coverage, Blocking: blocking,
+	}
 	if len(a.UncheckedCriteria) > 0 {
 		rec.CoverageGaps = []run.Gap{{Code: GapCriteriaUnchecked, Items: a.UncheckedCriteria}}
 	}

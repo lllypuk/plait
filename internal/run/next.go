@@ -18,6 +18,7 @@ const (
 	cmdReviewExport = "review export"
 	cmdReviewImport = "review import"
 	cmdReviewReport = "review report"
+	cmdMRDescribe   = "mr describe"
 )
 
 // Instruction is the answer of plait next: what the agent does now and with which command it hands the result back.
@@ -66,15 +67,26 @@ func Next(st *State) (Instruction, error) {
 		if err != nil {
 			return Instruction{}, err
 		}
-		in.Inputs = []string{path.Join(dir, "review-"+n+".json")}
-		if st.Step == StepImported {
-			in.Do = "Show the review report to the developer."
-			in.Output = Target{Cmd: "plait review report"}
-		} else {
-			in.Do = "Fix the findings the developer accepts, then export a new snapshot for another review round."
-			in.Output = Target{Cmd: "plait review export"}
-		}
 		in.Allowed = []string{cmdReviewReport, cmdReviewExport, cmdReviewImport, cmdCheckSave}
+		rev := st.Reviews[len(st.Reviews)-1]
+		switch {
+		case st.Step == StepImported:
+			in.Do = "Show the review report to the developer."
+			in.Inputs = []string{path.Join(dir, "review-"+n+".json")}
+			in.Output = Target{Cmd: "plait review report"}
+		case rev.Blocking > 0:
+			in.Do = fmt.Sprintf("The review left %d unresolved blocker or major findings. "+
+				"Fix the ones the developer accepts, then export a new snapshot for another review round.", rev.Blocking)
+			in.Inputs = []string{path.Join(dir, "findings-"+n+".json")}
+			in.Output = Target{Cmd: "plait review export"}
+			in.Allowed = append(in.Allowed, cmdMRDescribe)
+		default:
+			in.Do = "No blocker or major findings are left: describe the merge request. " +
+				"To fix the remaining findings first, fix them and export a new snapshot instead."
+			in.Inputs = []string{path.Join(dir, "findings-"+n+".json")}
+			in.Output = Target{Cmd: "plait mr describe"}
+			in.Allowed = append(in.Allowed, cmdMRDescribe)
+		}
 	default:
 		return Instruction{}, BrokenState(st, fmt.Sprintf("unknown step %q", st.Step))
 	}

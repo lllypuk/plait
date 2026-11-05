@@ -5,14 +5,17 @@
   "base": "89abcdef0123456789abcdef0123456789abcdef",
   "coverage": "diff_only",
   "coverage_label": "only the diff was checked: the task has no acceptance criteria",
+  "coverage_gaps": [],
   "stale": true,
   "review": ".plait/runs/PROJ-7-order-retry/review-2.json",
   "counts": {
-    "blocker": 0,
-    "major": 0,
-    "minor": 0,
-    "nit": 0
+    "new": 0,
+    "open": 0,
+    "region_changed": 0,
+    "outdated": 0,
+    "fix_confirmed": 0
   },
+  "blocking": 0,
   "findings": [],
   "step": "reported"
 }

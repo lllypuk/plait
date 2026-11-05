@@ -1,0 +1,87 @@
+{
+  "run": "PROJ-7-order-retry",
+  "snapshot": 1,
+  "commit": "0123456789abcdef0123456789abcdef01234567",
+  "base": "89abcdef0123456789abcdef0123456789abcdef",
+  "coverage": "criteria",
+  "coverage_label": "checked against the task's acceptance criteria",
+  "coverage_gaps": [],
+  "stale": false,
+  "review": ".plait/runs/PROJ-7-order-retry/review-1.json",
+  "counts": {
+    "new": 4,
+    "open": 0,
+    "region_changed": 0,
+    "outdated": 0,
+    "fix_confirmed": 0
+  },
+  "blocking": 3,
+  "findings": [
+    {
+      "key": "R1-F2",
+      "severity": "blocker",
+      "file": "b.go",
+      "line": 10,
+      "state": "unchanged",
+      "title": "no retry",
+      "rationale": "the order fails at once\nafter the first error",
+      "criterion": "retried 3 times",
+      "status": "new",
+      "history": [
+        {
+          "review": 1,
+          "status": "new"
+        }
+      ]
+    },
+    {
+      "key": "R1-F4",
+      "severity": "blocker",
+      "file": "c.go",
+      "line": 1,
+      "state": "unchanged",
+      "title": "panic",
+      "rationale": "nil map",
+      "status": "new",
+      "history": [
+        {
+          "review": 1,
+          "status": "new"
+        }
+      ]
+    },
+    {
+      "key": "R1-F3",
+      "severity": "major",
+      "file": "b.go",
+      "line": 12,
+      "state": "unchanged",
+      "title": "error ignored",
+      "rationale": "err is dropped",
+      "status": "new",
+      "history": [
+        {
+          "review": 1,
+          "status": "new"
+        }
+      ]
+    },
+    {
+      "key": "R1-F1",
+      "severity": "nit",
+      "file": "a.go",
+      "line": 3,
+      "state": "unchanged",
+      "title": "typo in name",
+      "rationale": "retires, not retries",
+      "status": "new",
+      "history": [
+        {
+          "review": 1,
+          "status": "new"
+        }
+      ]
+    }
+  ],
+  "step": "reported"
+}

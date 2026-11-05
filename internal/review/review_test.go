@@ -42,6 +42,9 @@ const (
 	keyF1         = "R1-F1"
 	keyF2         = "R1-F2"
 	sevBlocker    = "blocker"
+	sevMajor      = "major"
+	checkTest     = "test"
+	criterion     = "retried 3 times"
 	diffText      = "diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-a\n+a changed\n"
 )
 
@@ -122,7 +125,7 @@ func renderCases() []renderCase {
 				Rules:    []review.Rule{},
 				Diff:     diffText,
 				Checks: []review.Check{
-					{Name: "test", State: review.CheckFresh, Output: "ok  \texample.com/orders\t0.01s\n"},
+					{Name: checkTest, State: review.CheckFresh, Output: "ok  \texample.com/orders\t0.01s\n"},
 					{Name: checkLint, State: review.CheckFresh, ExitCode: 1, Output: "a.go:3:1: unused (unused)\n"},
 					{Name: checkVet, State: review.CheckStale, ExitCode: 2},
 					{Name: checkBuild, State: review.CheckMissing},
@@ -151,8 +154,8 @@ func previousCase() renderCase {
 			Rules:    []review.Rule{},
 			Diff:     diffText,
 			Previous: []review.Previous{
-				{Key: keyF1, Severity: "major", Title: "no retry", Rationale: "orders fail once and stop",
-					Criterion: "retried 3 times", At: vcs.Location{File: "a.txt", Line: 3, State: vcs.LineUnchanged}},
+				{Key: keyF1, Severity: sevMajor, Title: "no retry", Rationale: "orders fail once and stop",
+					Criterion: criterion, At: vcs.Location{File: "a.txt", Line: 3, State: vcs.LineUnchanged}},
 				{Key: keyF2, Severity: "minor", Title: "magic number", Rationale: "3 is inline",
 					At: vcs.Location{File: "a.txt", Line: 1, State: vcs.LineChanged}},
 				{Key: "R1-F3", Severity: "nit", Title: "typo", Rationale: "```` in a comment",

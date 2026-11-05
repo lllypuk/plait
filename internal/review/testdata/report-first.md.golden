@@ -1,0 +1,23 @@
+# Review report: run PROJ-7-order-retry, snapshot 1
+
+- Coverage: checked against the task's acceptance criteria
+- Snapshot: `0123456789abcdef0123456789abcdef01234567`
+- Base: `89abcdef0123456789abcdef0123456789abcdef`
+- Answer: `.plait/runs/PROJ-7-order-retry/review-1.json`
+
+## Findings: 4 new, 0 open, 0 region changed, 0 outdated, 0 fix confirmed
+
+Unresolved blocker or major: 3.
+
+### New
+
+- **R1-F2** blocker: no retry at `b.go:10`
+  the order fails at once
+  after the first error
+  Criterion: retried 3 times
+- **R1-F4** blocker: panic at `c.go:1`
+  nil map
+- **R1-F3** major: error ignored at `b.go:12`
+  err is dropped
+- **R1-F1** nit: typo in name at `a.go:3`
+  retires, not retries

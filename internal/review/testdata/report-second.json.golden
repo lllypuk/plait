@@ -1,0 +1,162 @@
+{
+  "run": "PROJ-7-order-retry",
+  "snapshot": 2,
+  "commit": "0123456789abcdef0123456789abcdef01234567",
+  "base": "89abcdef0123456789abcdef0123456789abcdef",
+  "coverage": "criteria",
+  "coverage_label": "checked against the task's acceptance criteria, incomplete: diff truncated (2 files); files excluded by audit.deny_globs (1 file); checks not saved: test; checks failed: lint; checks saved on another tree: vet; criteria the reviewer could not check (1)",
+  "coverage_gaps": [
+    {
+      "code": "diff_truncated",
+      "items": [
+        "gen/big.go",
+        "gen/huge.go"
+      ]
+    },
+    {
+      "code": "files_excluded",
+      "items": [
+        ".env"
+      ]
+    },
+    {
+      "code": "checks_missing",
+      "items": [
+        "test"
+      ]
+    },
+    {
+      "code": "checks_failed",
+      "items": [
+        "lint"
+      ]
+    },
+    {
+      "code": "checks_stale",
+      "items": [
+        "vet"
+      ]
+    },
+    {
+      "code": "criteria_unchecked",
+      "items": [
+        "retried 3 times"
+      ]
+    }
+  ],
+  "stale": false,
+  "review": ".plait/runs/PROJ-7-order-retry/review-2.json",
+  "counts": {
+    "new": 1,
+    "open": 1,
+    "region_changed": 1,
+    "outdated": 1,
+    "fix_confirmed": 1
+  },
+  "blocking": 3,
+  "findings": [
+    {
+      "key": "R2-F1",
+      "severity": "major",
+      "file": "d.go",
+      "line": 0,
+      "state": "unchanged",
+      "title": "no tests",
+      "rationale": "the retry is untested",
+      "status": "new",
+      "history": [
+        {
+          "review": 2,
+          "status": "new"
+        }
+      ]
+    },
+    {
+      "key": "R1-F1",
+      "severity": "nit",
+      "file": "a.go",
+      "line": 3,
+      "state": "unchanged",
+      "title": "typo in name",
+      "rationale": "retires, not retries",
+      "status": "open",
+      "history": [
+        {
+          "review": 1,
+          "status": "new"
+        },
+        {
+          "review": 2,
+          "status": "open",
+          "verdict": "still_open",
+          "note": "still misspelt\nin the log line"
+        }
+      ]
+    },
+    {
+      "key": "R1-F3",
+      "severity": "major",
+      "file": "b.go",
+      "line": 15,
+      "state": "changed",
+      "title": "error ignored",
+      "rationale": "err is dropped",
+      "status": "region_changed",
+      "history": [
+        {
+          "review": 1,
+          "status": "new"
+        },
+        {
+          "review": 2,
+          "status": "region_changed",
+          "verdict": "not_checked"
+        }
+      ]
+    },
+    {
+      "key": "R1-F4",
+      "severity": "blocker",
+      "file": "c.go",
+      "line": 1,
+      "state": "gone",
+      "title": "panic",
+      "rationale": "nil map",
+      "status": "outdated",
+      "history": [
+        {
+          "review": 1,
+          "status": "new"
+        },
+        {
+          "review": 2,
+          "status": "outdated"
+        }
+      ]
+    },
+    {
+      "key": "R1-F2",
+      "severity": "blocker",
+      "file": "b.go",
+      "line": 14,
+      "state": "unchanged",
+      "title": "no retry",
+      "rationale": "the order fails at once\nafter the first error",
+      "criterion": "retried 3 times",
+      "status": "fix_confirmed",
+      "history": [
+        {
+          "review": 1,
+          "status": "new"
+        },
+        {
+          "review": 2,
+          "status": "fix_confirmed",
+          "verdict": "fixed",
+          "note": "retried in a loop now"
+        }
+      ]
+    }
+  ],
+  "step": "reported"
+}

@@ -10,10 +10,11 @@ import (
 )
 
 const (
-	cmdExport = "review export"
-	cmdImport = "review import"
-	cmdReport = "review report"
-	cmdCheck  = "check save"
+	cmdExport   = "review export"
+	cmdImport   = "review import"
+	cmdReport   = "review report"
+	cmdCheck    = "check save"
+	cmdDescribe = "mr describe"
 )
 
 func TestNext(t *testing.T) {
@@ -21,6 +22,7 @@ func TestNext(t *testing.T) {
 	dir := ".plait/runs/" + id
 	snaps := []run.Snapshot{{N: 1}, {N: 2}}
 	reviews := []run.Review{{N: 2}}
+	blocking := []run.Review{{N: 2, Blocking: 1}}
 	tests := []struct {
 		name       string
 		st         run.State
@@ -56,18 +58,26 @@ func TestNext(t *testing.T) {
 			forbidCmds: []string{cmdReport},
 		},
 		{
-			name:      "imported",
-			st:        run.State{Step: run.StepImported, Snapshots: snaps, Reviews: reviews},
-			cmd:       "plait review report",
-			inputs:    []string{dir + "/review-2.json"},
-			mustAllow: cmdReport,
+			name:       "imported",
+			st:         run.State{Step: run.StepImported, Snapshots: snaps, Reviews: reviews},
+			cmd:        "plait review report",
+			inputs:     []string{dir + "/review-2.json"},
+			mustAllow:  cmdReport,
+			forbidCmds: []string{cmdDescribe},
 		},
 		{
-			name:      "reported",
-			st:        run.State{Step: run.StepReported, Snapshots: snaps, Reviews: reviews},
+			name:      "reported, blocker or major open",
+			st:        run.State{Step: run.StepReported, Snapshots: snaps, Reviews: blocking},
 			cmd:       "plait review export",
-			inputs:    []string{dir + "/review-2.json"},
+			inputs:    []string{dir + "/findings-2.json"},
 			mustAllow: cmdExport,
+		},
+		{
+			name:      "reported, nothing blocking",
+			st:        run.State{Step: run.StepReported, Snapshots: snaps, Reviews: reviews},
+			cmd:       "plait mr describe",
+			inputs:    []string{dir + "/findings-2.json"},
+			mustAllow: cmdDescribe,
 		},
 	}
 	for _, tt := range tests {
