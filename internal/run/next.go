@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/lllypuk/plait/internal/output"
+	"github.com/lllypuk/plait/internal/skills"
 )
 
 // FindingsSchema is the schema of a review answer the agent imports.
@@ -29,6 +30,7 @@ type Instruction struct {
 	Inputs  []string `json:"inputs"`
 	Output  Target   `json:"output"`
 	Allowed []string `json:"allowed"`
+	Guide   string   `json:"guide"`
 }
 
 // Target is the command that records the step result.
@@ -94,8 +96,26 @@ func Next(st *State) (Instruction, error) {
 	default:
 		return Instruction{}, BrokenState(st, fmt.Sprintf("unknown step %q", st.Step))
 	}
-	in.Allowed = append(in.Allowed, "next", "run list", "run resume", "run new")
+	in.Allowed = append(in.Allowed, "next", "guide", "run list", "run resume", "run new")
+	in.Guide = "plait guide " + guideStage(st)
 	return in, nil
+}
+
+// guideStage runs after the step switch, which has rejected a reported step without reviews.
+func guideStage(st *State) string {
+	switch st.Step {
+	case StepNew:
+		return skills.StageCtx
+	case StepReported:
+		if st.Reviews[len(st.Reviews)-1].Blocking > 0 {
+			return skills.StageFix
+		}
+		return skills.StageMR
+	case StepDescribed:
+		return skills.StageMR
+	case StepTaskSaved, StepExported, StepImported:
+	}
+	return skills.StageReview
 }
 
 func described(st *State, in *Instruction, dir string) error {

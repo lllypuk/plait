@@ -42,5 +42,6 @@ func nextText(in run.Instruction) string {
 	if in.Output.Schema != "" {
 		fmt.Fprintf(&b, " (schema %s)", in.Output.Schema)
 	}
+	fmt.Fprintf(&b, "\nguide: %s", in.Guide)
 	return b.String()
 }

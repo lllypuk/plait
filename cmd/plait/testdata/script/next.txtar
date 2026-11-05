@@ -6,6 +6,7 @@ stdout '^\{"ok":false,"error":\{"code":"no_current_run","message":"no current ru
 exec plait run new order-retry --key PROJ-7
 exec plait next --json
 stdout '^\{"ok":true,"data":\{"run":"PROJ-7-order-retry","step":"new","do":"[^"]+","inputs":\[\],"output":\{"cmd":"plait ctx save < task.md"\},"allowed":\["ctx save","next",'
+stdout '"guide":"plait guide ctx"\}\}$'
 
 # a corrupt step stops for a human
 cp state.json .plait/runs/PROJ-7-order-retry/state.json

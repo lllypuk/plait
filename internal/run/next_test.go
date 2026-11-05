@@ -7,6 +7,7 @@ import (
 
 	"github.com/lllypuk/plait/internal/output"
 	"github.com/lllypuk/plait/internal/run"
+	"github.com/lllypuk/plait/internal/skills"
 )
 
 const (
@@ -31,6 +32,7 @@ func TestNext(t *testing.T) {
 		inputs     []string
 		mustAllow  string
 		forbidCmds []string
+		guide      string
 	}{
 		{
 			name:       "new",
@@ -39,6 +41,7 @@ func TestNext(t *testing.T) {
 			inputs:     []string{},
 			mustAllow:  "ctx save",
 			forbidCmds: []string{cmdExport, cmdImport, cmdReport, cmdCheck},
+			guide:      skills.StageCtx,
 		},
 		{
 			name:       "task saved",
@@ -47,6 +50,7 @@ func TestNext(t *testing.T) {
 			inputs:     []string{dir + "/task.md"},
 			mustAllow:  cmdExport,
 			forbidCmds: []string{cmdImport, cmdReport},
+			guide:      skills.StageReview,
 		},
 		{
 			name:       "exported",
@@ -56,6 +60,7 @@ func TestNext(t *testing.T) {
 			inputs:     []string{dir + "/review-2/package.md"},
 			mustAllow:  cmdImport,
 			forbidCmds: []string{cmdReport},
+			guide:      skills.StageReview,
 		},
 		{
 			name:       "imported",
@@ -64,6 +69,7 @@ func TestNext(t *testing.T) {
 			inputs:     []string{dir + "/review-2.json"},
 			mustAllow:  cmdReport,
 			forbidCmds: []string{cmdDescribe},
+			guide:      skills.StageReview,
 		},
 		{
 			name:      "reported, blocker or major open",
@@ -71,6 +77,7 @@ func TestNext(t *testing.T) {
 			cmd:       "plait review export",
 			inputs:    []string{dir + "/findings-2.json"},
 			mustAllow: cmdExport,
+			guide:     skills.StageFix,
 		},
 		{
 			name:      "reported, nothing blocking",
@@ -78,6 +85,7 @@ func TestNext(t *testing.T) {
 			cmd:       "plait mr describe",
 			inputs:    []string{dir + "/findings-2.json"},
 			mustAllow: cmdDescribe,
+			guide:     skills.StageMR,
 		},
 		{
 			name:      "described",
@@ -85,6 +93,7 @@ func TestNext(t *testing.T) {
 			cmd:       "plait mr describe",
 			inputs:    []string{dir + "/mr.md"},
 			mustAllow: cmdExport,
+			guide:     skills.StageMR,
 		},
 	}
 	for _, tt := range tests {
@@ -94,11 +103,9 @@ func TestNext(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if in.Run != id || in.Step != tt.st.Step || in.Do == "" {
-				t.Errorf("instruction = %+v", in)
-			}
-			if in.Output.Cmd != tt.cmd || in.Output.Schema != tt.schema {
-				t.Errorf("output = %+v, want cmd %q schema %q", in.Output, tt.cmd, tt.schema)
+			if in.Run != id || in.Step != tt.st.Step || in.Do == "" || in.Output.Cmd != tt.cmd ||
+				in.Output.Schema != tt.schema {
+				t.Errorf("instruction = %+v, want cmd %q schema %q", in, tt.cmd, tt.schema)
 			}
 			if !slices.Equal(in.Inputs, tt.inputs) {
 				t.Errorf("inputs = %q, want %q", in.Inputs, tt.inputs)
@@ -108,6 +115,7 @@ func TestNext(t *testing.T) {
 				want = append(want, cmdCheck)
 			}
 			checkAllowed(t, in.Allowed, want, tt.forbidCmds)
+			checkGuide(t, in.Guide, tt.guide)
 		})
 	}
 }
@@ -134,6 +142,16 @@ func TestCurrentWithoutRun(t *testing.T) {
 	wantInvalid(t, err, "no_current_run")
 	if e, _ := errors.AsType[*output.Error](err); e.Fix != "start one with plait run new <slug>" {
 		t.Errorf("fix = %q", e.Fix)
+	}
+}
+
+func checkGuide(t *testing.T, got, stage string) {
+	t.Helper()
+	if got != "plait guide "+stage {
+		t.Errorf("guide = %q, want plait guide %s", got, stage)
+	}
+	if _, err := skills.Guide(stage); err != nil {
+		t.Errorf("guide %s: %v", stage, err)
 	}
 }
 

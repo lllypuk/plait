@@ -1,0 +1,27 @@
+---
+name: plait
+description: "Use when the user asks to work through plait or a plait run is in progress (.plait/runs/ exists in the repository). Explains how to follow plait; the steps themselves come from plait next."
+plait-managed: true
+plait-version: {{.Version}}
+---
+
+# plait
+
+plait guides you through the team dev-flow. A run is one task, kept in `.plait/runs/<id>/`; its step decides what you may do. The process lives in plait, not in this text.
+
+## Start with plait next
+
+1. Run `plait next --json` and do what `do` says, reading the files in `inputs`.
+2. Record the result with `output.cmd`; when `output.schema` is set, the result must match it.
+3. Call only the plait commands listed in `allowed`.
+4. For the details of the step, run the command in `guide`, such as `plait guide review`.
+
+Without a current run, `plait next` says how to start one: `plait run new <slug> [--key KEY]`.
+
+## Contract
+
+- Outside a terminal or with `--json` every command answers with `{"ok":true,"data":...}` or `{"ok":false,"error":{"code","message","fix"}}`.
+- Exit codes: 0 ok; 2 invalid input, do what `fix` says and retry; 3 forbidden by policy, do not work around it; 4 a human is needed, stop and show the error to the developer.
+- Commands are idempotent and never ask questions: rerunning one is safe.
+- Never run `plait approve` or `plait reject`: they belong to the developer.
+- Do not edit files under `.plait/runs/` by hand; plait commands write them.

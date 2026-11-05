@@ -1,0 +1,21 @@
+# a stage guide in the JSON envelope, outside a run and a repository
+exec plait guide review --json
+stdout '^\{"ok":true,"data":\{"stage":"review","text":"# Guide: review '
+stdout 'review-findings/v1'
+! stderr .
+
+# every stage has a guide
+exec plait guide ctx
+exec plait guide fix
+exec plait guide mr
+exec plait guide reviewer
+stdout '"stage":"reviewer"'
+
+# an unknown stage lists the known ones
+exitcode 2 plait guide deploy --json
+stdout '"code":"unknown_stage"'
+stdout 'known: ctx, review, fix, mr, reviewer'
+
+# the stage is required
+exitcode 2 plait guide --json
+stdout '"code":"usage"'

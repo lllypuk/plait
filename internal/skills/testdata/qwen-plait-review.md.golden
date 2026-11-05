@@ -1,0 +1,21 @@
+---
+name: plait-review
+description: "Use only when the user explicitly asks for /plait-review. Prepares the current change for review by a fresh agent session through plait and handles its answer."
+plait-managed: true
+plait-version: "v0.1.0-3-gabcdef0"
+---
+
+# /plait-review
+
+You are the author side: you prepare the change for a reviewer in a fresh session and handle the answer. Do not review the change yourself.
+
+1. Run `plait next --json`. Without a current run, start one: `plait run new <slug> --key <KEY>`, or without `--key` when the task has no tracker key.
+2. Task context: with a key, run `plait ctx <KEY>` and do what it says; otherwise save the task the developer gives you with `plait ctx save < task.md`. Do not invent acceptance criteria.
+3. Checks: run the team's checks and save each one: `plait check save <name> --exit-code <code> --file <output>`.
+4. `plait review export` writes `package.md`. Ask the developer to open a new agent session, give it the package and save its JSON answer to a file. Do not review the package in this session.
+5. `plait review import <file>`, then `plait review report`; show the report to the developer.
+6. Continue by `plait next --json`: fix the findings the developer accepts and export again, or describe the merge request with /plait-mr.
+
+Details of each step: `plait guide ctx`, `plait guide review`, `plait guide fix`. The developer who opens the fresh session can read `plait guide reviewer`.
+
+On an error do what its `fix` says; exit code 4 means stop and ask the developer.

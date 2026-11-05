@@ -1,0 +1,21 @@
+---
+name: plait-mr
+description: "Use only when the user explicitly asks for /plait-mr. Writes the merge request title and body from the reviewed plait run; it creates no merge request."
+plait-managed: true
+plait-version: "v0.1.0-3-gabcdef0"
+disable-model-invocation: true
+---
+
+# /plait-mr
+
+plait builds the merge request description from the run: task, review coverage, findings and checks. You add a short summary of the change; the developer creates the merge request.
+
+1. Run `plait next --json`. If it does not offer `plait mr describe`, do what it says first: the change has to be reviewed by /plait-review.
+2. Open blocker or major findings: tell the developer and ask whether to fix them first; fixing means a new review round.
+3. Write the summary to a file: what changed and why, in two to five lines, without repeating the task text.
+4. Run `plait mr describe --summary-file <file>`, or `--summary-file -` with the summary on stdin.
+5. Show the title and body from `mr.md` to the developer. Do not create the merge request yourself.
+
+If the working copy changed after the reviewed snapshot, `mr describe` refuses: review the current code with /plait-review, or, only when the developer says so, describe the reviewed snapshot with `--allow-stale`.
+
+Details: `plait guide mr`. On an error do what its `fix` says; exit code 4 means stop and ask the developer.
