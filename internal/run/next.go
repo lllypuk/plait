@@ -1,0 +1,102 @@
+package run
+
+import (
+	"fmt"
+	"path"
+	"strconv"
+
+	"github.com/lllypuk/plait/internal/output"
+)
+
+// FindingsSchema is the schema of a review answer the agent imports.
+const FindingsSchema = "review-findings/v1"
+
+// Commands the agent may call, as listed in Instruction.Allowed.
+const (
+	cmdCtxSave      = "ctx save"
+	cmdReviewExport = "review export"
+	cmdReviewImport = "review import"
+	cmdReviewReport = "review report"
+)
+
+// Instruction is the answer of plait next: what the agent does now and with which command it hands the result back.
+type Instruction struct {
+	Run     string   `json:"run"`
+	Step    Step     `json:"step"`
+	Do      string   `json:"do"`
+	Inputs  []string `json:"inputs"`
+	Output  Target   `json:"output"`
+	Allowed []string `json:"allowed"`
+}
+
+// Target is the command that records the step result.
+type Target struct {
+	Cmd    string `json:"cmd"`
+	Schema string `json:"schema,omitempty"`
+}
+
+// Next derives the instruction from the run step; paths are relative to the repository root.
+func Next(st *State) (Instruction, error) {
+	dir := path.Join(".plait", "runs", st.ID)
+	in := Instruction{Run: st.ID, Step: st.Step, Inputs: []string{}}
+	switch st.Step {
+	case StepNew:
+		in.Do = "Save the task description with its acceptance criteria as Markdown on stdin. " +
+			"Do not invent criteria: if the task has none, save it without them."
+		in.Output = Target{Cmd: "plait ctx save < task.md"}
+		in.Allowed = []string{cmdCtxSave}
+	case StepTaskSaved:
+		in.Do = "Export the review package: plait snapshots the working copy and writes package.md for a fresh session."
+		in.Inputs = []string{path.Join(dir, "task.md")}
+		in.Output = Target{Cmd: "plait review export"}
+		in.Allowed = []string{cmdReviewExport, cmdCtxSave}
+	case StepExported:
+		n, err := lastSnapshot(st)
+		if err != nil {
+			return Instruction{}, err
+		}
+		in.Do = "Ask the developer to open a new agent session, give it package.md and save its JSON answer to a file; " +
+			"do not review the package in this session. Then import the answer."
+		in.Inputs = []string{path.Join(dir, "review-"+n, "package.md")}
+		in.Output = Target{Cmd: "plait review import <file|->", Schema: FindingsSchema}
+		in.Allowed = []string{cmdReviewImport, cmdReviewExport}
+	case StepImported, StepReported:
+		n, err := lastReview(st)
+		if err != nil {
+			return Instruction{}, err
+		}
+		in.Inputs = []string{path.Join(dir, "review-"+n+".json")}
+		if st.Step == StepImported {
+			in.Do = "Show the review report to the developer."
+			in.Output = Target{Cmd: "plait review report"}
+		} else {
+			in.Do = "Fix the findings the developer accepts, then export a new snapshot for another review round."
+			in.Output = Target{Cmd: "plait review export"}
+		}
+		in.Allowed = []string{cmdReviewReport, cmdReviewExport, cmdReviewImport}
+	default:
+		return Instruction{}, brokenState(st, fmt.Sprintf("unknown step %q", st.Step))
+	}
+	in.Allowed = append(in.Allowed, "next", "run list", "run resume", "run new")
+	return in, nil
+}
+
+func lastSnapshot(st *State) (string, error) {
+	if len(st.Snapshots) == 0 {
+		return "", brokenState(st, "step "+string(st.Step)+" without a snapshot")
+	}
+	return strconv.Itoa(st.Snapshots[len(st.Snapshots)-1].N), nil
+}
+
+func lastReview(st *State) (string, error) {
+	if len(st.Reviews) == 0 {
+		return "", brokenState(st, "step "+string(st.Step)+" without an imported review")
+	}
+	return strconv.Itoa(st.Reviews[len(st.Reviews)-1].N), nil
+}
+
+func brokenState(st *State, why string) error {
+	file := path.Join(".plait", "runs", st.ID, stateFile)
+	return output.NeedsHuman("state_corrupt", fmt.Sprintf("%s: %s", file, why),
+		"stop and ask a human to repair "+file+" or start over with "+newRunFix)
+}

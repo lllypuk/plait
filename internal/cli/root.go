@@ -64,7 +64,7 @@ func (a *app) newRoot() *cobra.Command {
 		PersistentPreRun: func(*cobra.Command, []string) { a.started = true },
 	}
 	root.PersistentFlags().BoolVar(&a.json, "json", false, "print the JSON envelope even on a terminal")
-	root.AddCommand(a.newVersionCmd(), a.newRunCmd())
+	root.AddCommand(a.newVersionCmd(), a.newRunCmd(), a.newNextCmd())
 	return root
 }
 

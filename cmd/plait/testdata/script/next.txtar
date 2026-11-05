@@ -1,0 +1,17 @@
+# without a current run next says how to start one
+exitcode 2 plait next --json
+stdout '^\{"ok":false,"error":\{"code":"no_current_run","message":"no current run","fix":"start one with plait run new <slug>"\}\}$'
+
+# a new run asks for the task
+exec plait run new order-retry --key PROJ-7
+exec plait next --json
+stdout '^\{"ok":true,"data":\{"run":"PROJ-7-order-retry","step":"new","do":"[^"]+","inputs":\[\],"output":\{"cmd":"plait ctx save < task.md"\},"allowed":\["ctx save","next",'
+
+# a corrupt step stops for a human
+cp state.json .plait/runs/PROJ-7-order-retry/state.json
+exitcode 4 plait next --json
+stdout '"code":"state_corrupt"'
+stdout '"fix":"stop and ask a human'
+
+-- state.json --
+{"schema":"plait-state/v1","id":"PROJ-7-order-retry","created_at":"2026-11-05T10:00:00Z","snapshots":[],"reviews":[],"step":"bogus"}
