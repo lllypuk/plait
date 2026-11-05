@@ -1,0 +1,51 @@
+env GIT_CONFIG_NOSYSTEM=1
+env GIT_AUTHOR_NAME=dev GIT_AUTHOR_EMAIL=dev@example.com GIT_COMMITTER_NAME=dev GIT_COMMITTER_EMAIL=dev@example.com
+mkdir repo
+cd repo
+exec git init -q -b main
+cp ../a.txt a.txt
+exec git add -A
+exec git commit -q -m init
+
+# check save needs a current run
+stdin ../test.log
+exitcode 2 plait check save test --exit-code 1 --json
+stdout '"code":"no_current_run"'
+
+exec plait run new order-retry
+
+# the output from stdin is saved with its exit code and tree, secrets redacted
+stdin ../test.log
+exec plait check save test --exit-code 1 --json
+stdout '^\{"ok":true,"data":\{"run":"[^"]+-order-retry","name":"test","path":".plait/runs/[^"]+/checks/test.json","exit_code":1,"tree":"[0-9a-f]{40}","changed":true,"step":"new"\}\}$'
+capture RUN '"run":"([^"]+)"'
+grep '"output_tail": "--- FAIL: TestRetry\\nDB_PASSWORD=\[redacted\]\\nFAIL\\n"' .plait/runs/$RUN/checks/test.json
+! grep hunter2 .plait/runs/$RUN/checks/test.json
+
+# the same output, exit code and tree again change nothing
+stdin ../test.log
+exec plait check save test --exit-code 1 --json
+stdout '"changed":false'
+
+# --file, another check
+exec plait check save lint --exit-code 0 --file ../lint.log --json
+stdout '"name":"lint".*"exit_code":0.*"changed":true'
+exists .plait/runs/$RUN/checks/lint.json
+
+# a bad name is invalid with a fix
+stdin ../test.log
+exitcode 2 plait check save Bad/Name --exit-code 1 --json
+stdout '"code":"invalid_check_name"'
+stdout '"fix":"name the check'
+
+exitcode 2 plait check save lint --exit-code 0 --file missing.log --json
+stdout '"code":"check_file_not_found"'
+
+-- a.txt --
+a
+-- test.log --
+--- FAIL: TestRetry
+DB_PASSWORD=hunter2
+FAIL
+-- lint.log --
+0 issues.

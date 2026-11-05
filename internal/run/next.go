@@ -14,6 +14,7 @@ const FindingsSchema = "review-findings/v1"
 // Commands the agent may call, as listed in Instruction.Allowed.
 const (
 	cmdCtxSave      = "ctx save"
+	cmdCheckSave    = "check save"
 	cmdReviewExport = "review export"
 	cmdReviewImport = "review import"
 	cmdReviewReport = "review report"
@@ -49,7 +50,7 @@ func Next(st *State) (Instruction, error) {
 		in.Do = "Export the review package: plait snapshots the working copy and writes package.md for a fresh session."
 		in.Inputs = []string{path.Join(dir, "task.md")}
 		in.Output = Target{Cmd: "plait review export"}
-		in.Allowed = []string{cmdReviewExport, cmdCtxSave}
+		in.Allowed = []string{cmdReviewExport, cmdCtxSave, cmdCheckSave}
 	case StepExported:
 		n, err := lastSnapshot(st)
 		if err != nil {
@@ -59,7 +60,7 @@ func Next(st *State) (Instruction, error) {
 			"do not review the package in this session. Then import the answer."
 		in.Inputs = []string{path.Join(dir, "review-"+n, "package.md")}
 		in.Output = Target{Cmd: "plait review import <file|->", Schema: FindingsSchema}
-		in.Allowed = []string{cmdReviewImport, cmdReviewExport}
+		in.Allowed = []string{cmdReviewImport, cmdReviewExport, cmdCheckSave}
 	case StepImported, StepReported:
 		n, err := lastReview(st)
 		if err != nil {
@@ -73,7 +74,7 @@ func Next(st *State) (Instruction, error) {
 			in.Do = "Fix the findings the developer accepts, then export a new snapshot for another review round."
 			in.Output = Target{Cmd: "plait review export"}
 		}
-		in.Allowed = []string{cmdReviewReport, cmdReviewExport, cmdReviewImport}
+		in.Allowed = []string{cmdReviewReport, cmdReviewExport, cmdReviewImport, cmdCheckSave}
 	default:
 		return Instruction{}, BrokenState(st, fmt.Sprintf("unknown step %q", st.Step))
 	}

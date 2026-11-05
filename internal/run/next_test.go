@@ -13,6 +13,7 @@ const (
 	cmdExport = "review export"
 	cmdImport = "review import"
 	cmdReport = "review report"
+	cmdCheck  = "check save"
 )
 
 func TestNext(t *testing.T) {
@@ -35,7 +36,7 @@ func TestNext(t *testing.T) {
 			cmd:        "plait ctx save < task.md",
 			inputs:     []string{},
 			mustAllow:  "ctx save",
-			forbidCmds: []string{cmdExport, cmdImport, cmdReport},
+			forbidCmds: []string{cmdExport, cmdImport, cmdReport, cmdCheck},
 		},
 		{
 			name:       "task saved",
@@ -85,7 +86,11 @@ func TestNext(t *testing.T) {
 			if !slices.Equal(in.Inputs, tt.inputs) {
 				t.Errorf("inputs = %q, want %q", in.Inputs, tt.inputs)
 			}
-			checkAllowed(t, in.Allowed, []string{tt.mustAllow, "next"}, tt.forbidCmds)
+			want := []string{tt.mustAllow, "next"}
+			if tt.st.Step != run.StepNew {
+				want = append(want, cmdCheck)
+			}
+			checkAllowed(t, in.Allowed, want, tt.forbidCmds)
 		})
 	}
 }

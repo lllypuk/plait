@@ -53,9 +53,7 @@ func (a *app) newCtxSaveCmd() *cobra.Command {
 				return err
 			}
 			if root, rootErr := a.repoRoot(); rootErr == nil {
-				if rel, relErr := filepath.Rel(root, res.Path); relErr == nil {
-					res.Path = rel
-				}
+				res.Path = relTo(root, res.Path)
 			}
 			return a.printer().Success(res, ctxSaveText(res))
 		},
@@ -108,6 +106,14 @@ func readLimited(r io.Reader, limit int, tooLarge *output.Error) ([]byte, error)
 		return nil, tooLarge
 	}
 	return b, nil
+}
+
+// relTo keeps path as is when it is not under root.
+func relTo(root, path string) string {
+	if rel, err := filepath.Rel(root, path); err == nil {
+		return rel
+	}
+	return path
 }
 
 func isTTY(r io.Reader) bool {
