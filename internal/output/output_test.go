@@ -166,3 +166,29 @@ func TestFailPlainErrorIsInternal(t *testing.T) {
 		t.Errorf("error = %+v, want code internal with fix", env.Error)
 	}
 }
+
+func TestFailWithResult(t *testing.T) {
+	e := output.NeedsHuman("install_conflict", "1 file left in place", "move it away")
+	e.Data, e.Text = map[string]int{"n": 1}, "conflict a.md"
+
+	var out, errOut bytes.Buffer
+	p := output.Printer{Out: &out, Err: &errOut, Mode: output.JSON}
+	if code := p.Fail(e); code != 4 {
+		t.Errorf("exit code = %d, want 4", code)
+	}
+	want := `{"ok":false,"error":{"code":"install_conflict","message":"1 file left in place","fix":"move it away"},` +
+		`"data":{"n":1}}` + "\n"
+	if out.String() != want {
+		t.Errorf("stdout = %q, want %q", out.String(), want)
+	}
+
+	out.Reset()
+	p.Mode = output.Text
+	p.Fail(e)
+	if out.String() != "conflict a.md\n" {
+		t.Errorf("stdout = %q, want the result text", out.String())
+	}
+	if errOut.String() != "error: 1 file left in place\nfix: move it away\n" {
+		t.Errorf("stderr = %q", errOut.String())
+	}
+}

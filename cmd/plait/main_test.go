@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"testing"
@@ -19,13 +20,24 @@ func TestMain(m *testing.M) {
 
 func TestScript(t *testing.T) {
 	testscript.Run(t, testscript.Params{
-		Dir: "testdata/script",
+		Dir:   "testdata/script",
+		Setup: setup,
 		Cmds: map[string]func(*testscript.TestScript, bool, []string){
 			"exitcode": exitCode,
 			"capture":  capture,
 			"expand":   expand,
 		},
 	})
+}
+
+// setup exports PLAITBIN, the directory of the plait command, so a script can narrow PATH to its own fake agents.
+func setup(env *testscript.Env) error {
+	p, err := exec.LookPath("plait")
+	if err != nil {
+		return err
+	}
+	env.Setenv("PLAITBIN", filepath.Dir(p))
+	return nil
 }
 
 // exitCode runs `exitcode N cmd args...` and fails unless cmd exits with N; testscript's exec only tells zero from non-zero.

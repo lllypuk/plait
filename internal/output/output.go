@@ -50,6 +50,7 @@ type errorBody struct {
 type errorEnvelope struct {
 	OK    bool      `json:"ok"`
 	Error errorBody `json:"error"`
+	Data  any       `json:"data,omitempty"`
 }
 
 // Printer writes results; in JSON mode errors also go to Out so the agent reads one stream.
@@ -74,8 +75,12 @@ func (p Printer) Fail(err error) int {
 		return ExitOK
 	}
 	if p.Mode == JSON {
-		_ = writeJSON(p.Out, errorEnvelope{Error: errorBody{Code: e.Code, Message: e.Message, Fix: e.Fix}})
+		body := errorBody{Code: e.Code, Message: e.Message, Fix: e.Fix}
+		_ = writeJSON(p.Out, errorEnvelope{Error: body, Data: e.Data})
 		return e.ExitCode()
+	}
+	if e.Text != "" {
+		_ = writeLine(p.Out, e.Text)
 	}
 	_ = writeLine(p.Err, "error: "+e.Message)
 	if e.Fix != "" {

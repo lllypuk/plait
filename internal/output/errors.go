@@ -31,6 +31,9 @@ type Error struct {
 	Message string
 	Fix     string
 	Err     error
+	// Data and Text are the partial result of a command that did its work and still needs a human.
+	Data any
+	Text string
 }
 
 func (e *Error) Error() string { return e.Message }

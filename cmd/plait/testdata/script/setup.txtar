@@ -1,0 +1,98 @@
+# fake agents in an isolated PATH and HOME; the real ~/.claude and ~/.qwen are never touched
+chmod 755 bin/claude
+chmod 755 bin/qwen
+env HOME=$WORK/home
+env PATH=$WORK/bin${:}$PLAITBIN
+
+# without agents in PATH setup says how to name one
+env PATH=$WORK/empty${:}$PLAITBIN
+exitcode 2 plait setup --json
+stdout '"code":"no_agents"'
+stdout 'looked for: claude, qwen'
+stdout '"fix":"install a coding agent, or pass --agent NAME; .*agents.<name>.cmd'
+env PATH=$WORK/bin${:}$PLAITBIN
+
+# an unknown agent and scope are invalid
+exitcode 2 plait setup --agent nope --json
+stdout '"code":"unknown_agent"'
+stdout 'known: claude, qwen'
+exitcode 2 plait setup --scope team --json
+stdout '"code":"unknown_scope"'
+
+# dry run plans every skill and the deny rules and writes nothing
+exec plait setup --dry-run --json
+stdout '"scope":"user","dry_run":true,"uninstall":false'
+stdout '"name":"claude","installed":true,"path":"[^"]+","version":"2.1.0 \(Claude Code\)"'
+stdout '"name":"qwen","installed":true'
+stdout '"action":"create","path":"[^"]+/home/.claude/skills/plait-review/SKILL.md","agent":"claude","item":"skill plait-review"'
+stdout '"action":"create","path":"[^"]+/home/.qwen/settings.json","agent":"qwen","item":"permissions"'
+stdout '"changed":false'
+! exists home/.claude
+! exists home/.qwen
+
+# setup installs skills and deny rules for both agents
+exec plait setup --json
+stdout '"changed":true'
+# doctor checks join the answer after Task 6; until then the list is empty
+stdout '"checks":\[\]'
+exists home/.claude/skills/plait/SKILL.md
+exists home/.claude/skills/plait-review/SKILL.md
+exists home/.claude/skills/plait-mr/SKILL.md
+exists home/.qwen/skills/plait-review/SKILL.md
+grep 'plait-managed: true' home/.qwen/skills/plait/SKILL.md
+grep 'Bash\(plait approve:\*\)' home/.claude/settings.json
+grep 'Bash\(plait reject \*\)' home/.qwen/settings.json
+
+# repeating it changes nothing
+exec plait setup --json
+stdout '"changed":false'
+! stdout '"action":"(create|update)"'
+
+# --agent installs one agent, project scope goes under the working directory
+exec plait setup --agent qwen --scope project --json
+stdout '"scope":"project"'
+! stdout '"agent":"claude"'
+exists .qwen/skills/plait-mr/SKILL.md
+grep 'Bash\(plait approve \*\)' .qwen/settings.json
+! exists .claude
+
+# --agent works for an agent that is not in PATH
+env PATH=$WORK/empty${:}$PLAITBIN
+exec plait setup --agent claude --scope project --json
+stdout '"name":"claude","installed":false'
+exists .claude/skills/plait/SKILL.md
+env PATH=$WORK/bin${:}$PLAITBIN
+
+# a skill file plait did not write is a conflict: left in place, the rest installed, exit 4
+rm home/.claude/skills/plait-mr/SKILL.md
+cp own-skill.md home/.claude/skills/plait-mr/SKILL.md
+rm home/.qwen/skills/plait/SKILL.md
+exitcode 4 plait setup --json
+stdout '^\{"ok":false,"error":\{"code":"install_conflict","message":"1 file is not plait.s and was left in place: [^"]+/home/.claude/skills/plait-mr/SKILL.md"'
+stdout '"data":\{"scope":"user"'
+stdout '"action":"conflict","path":"[^"]+/plait-mr/SKILL.md"'
+cmp home/.claude/skills/plait-mr/SKILL.md own-skill.md
+exists home/.qwen/skills/plait/SKILL.md
+
+# --uninstall removes plait files and rules only
+exec plait setup --uninstall --json
+stdout '"uninstall":true'
+stdout '"changed":true'
+! exists home/.claude/skills/plait/SKILL.md
+! exists home/.qwen/skills/plait-review
+cmp home/.claude/skills/plait-mr/SKILL.md own-skill.md
+! grep 'plait approve' home/.claude/settings.json
+! grep 'plait reject' home/.qwen/settings.json
+
+-- bin/claude --
+#!/bin/sh
+echo '2.1.0 (Claude Code)'
+-- bin/qwen --
+#!/bin/sh
+echo 0.9.1
+-- empty/.keep --
+-- own-skill.md --
+---
+name: plait-mr
+---
+my own skill
