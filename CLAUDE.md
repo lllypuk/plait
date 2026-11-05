@@ -6,7 +6,7 @@ plait — Go CLI, которой пользуются coding-агенты (Claud
 
 ## Состояние
 
-Готовы сквозной срез v0 и ядро ревью (`docs/plans/completed/20261105-01-v0-slice.md`, `…-02-v0-review-core.md`); остаток v0 — план 03+. Источник истины — `docs/plait-brief.md`: архитектура, интерфейсы (`Agent`, `Installer`, `Stage`, `Forge`), схема конфига, roadmap. Начинаем с шага 1 roadmap — v0, её объём и обещание в разделе «Первая версия». Отступая от брифа, правь бриф в том же изменении.
+Готовы сквозной срез v0, ядро ревью и установка (`docs/plans/completed/20261105-01-v0-slice.md`, `…-02-v0-review-core.md`, `…-03-v0-install.md`); остаток v0 — пилотный замер 1 (`docs/pilot/measurement-1.md`). Источник истины — `docs/plait-brief.md`: архитектура, интерфейсы (`Agent`, `Installer`, `Stage`, `Forge`), схема конфига, roadmap. Начинаем с шага 1 roadmap — v0, её объём и обещание в разделе «Первая версия». Отступая от брифа, правь бриф в том же изменении.
 
 `private/` в `.gitignore` и есть только локально: там контекст конкретного внедрения. Названия, детали и примеры оттуда в отслеживаемые файлы, коммиты и issues не переносить: репозиторий публичный.
 
@@ -28,7 +28,7 @@ Golden-файлы `internal/review/testdata` обновляет `go test ./inter
 
 ## Раскладка
 
-Срез отошёл от целевой раскладки брифа: `internal/run` держит run, `state.json` и `next` (в брифе — `pipeline`), `internal/review` — пакет, схему, импорт, сравнение прогонов и отчёт (в брифе — `artifact`), `internal/task` — `ctx save`, `internal/check` — `check save` (в брифе нет), `internal/mr` — `mr describe` (в брифе — часть `forge`), `internal/output` — контракт вывода. Сливать с брифом, когда появятся стадии.
+Срез отошёл от целевой раскладки брифа: `internal/run` держит run, `state.json` и `next` (в брифе — `pipeline`), `internal/review` — пакет, схему, импорт, сравнение прогонов и отчёт (в брифе — `artifact`), `internal/task` — `ctx` и `ctx save` (в брифе — `tracker`), `internal/check` — `check save`, `internal/doctor` — `doctor`, `internal/netx` — общий HTTP-транспорт (этих трёх в брифе нет), `internal/mr` — `mr describe` (в брифе — часть `forge`), `internal/output` — контракт вывода. Сливать с брифом, когда появятся стадии.
 
 ## Инварианты, которые легко нарушить
 
