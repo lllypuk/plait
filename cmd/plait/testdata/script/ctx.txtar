@@ -1,0 +1,55 @@
+# ctx save needs a current run
+stdin task.md
+exitcode 2 plait ctx save --json
+stdout '"code":"no_current_run"'
+
+exec plait run new order-retry --key PROJ-7
+
+# empty stdin is invalid input with a fix
+exitcode 2 plait ctx save --json
+stdout '"code":"empty_task"'
+stdout '"fix":"pipe the task Markdown'
+
+# the task with criteria is saved and next asks for the export
+stdin task.md
+exec plait ctx save PROJ-7 --source jira --json
+stdout '^\{"ok":true,"data":\{"run":"PROJ-7-order-retry","path":".plait/runs/PROJ-7-order-retry/task.md","source":"jira","key":"PROJ-7","has_criteria":true,"changed":true,"step":"task_saved"\}\}$'
+cmp .plait/runs/PROJ-7-order-retry/task.md want-task.md
+exec plait next --json
+stdout '"output":\{"cmd":"plait review export"\}'
+stdout '"inputs":\[".plait/runs/PROJ-7-order-retry/task.md"\]'
+
+# the same input again changes nothing
+stdin task.md
+exec plait ctx save PROJ-7 --source jira --json
+stdout '"changed":false'
+
+# a task without criteria is marked as a gap
+exec plait ctx save --file no-criteria.md --json
+stdout '"has_criteria":false,"changed":true'
+grep 'plait:gap acceptance_criteria' .plait/runs/PROJ-7-order-retry/task.md
+
+exitcode 2 plait ctx save --file missing.md --json
+stdout '"code":"task_file_not_found"'
+
+-- task.md --
+# Retry failed orders
+
+Orders that fail on payment are retried.
+
+## Acceptance criteria
+
+- a failed order is retried 3 times
+-- want-task.md --
+# PROJ-7: Retry failed orders
+<!-- plait:source jira -->
+
+Orders that fail on payment are retried.
+
+## Критерии приёмки
+
+- a failed order is retried 3 times
+-- no-criteria.md --
+# Retry failed orders
+
+Orders that fail on payment are retried.

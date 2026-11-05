@@ -19,6 +19,7 @@ type Options struct {
 	Args    []string
 	// Dir is the working directory; empty means the process one.
 	Dir        string
+	Stdin      io.Reader
 	Stdout     io.Writer
 	Stderr     io.Writer
 	IsTerminal func(io.Writer) bool
@@ -64,7 +65,7 @@ func (a *app) newRoot() *cobra.Command {
 		PersistentPreRun: func(*cobra.Command, []string) { a.started = true },
 	}
 	root.PersistentFlags().BoolVar(&a.json, "json", false, "print the JSON envelope even on a terminal")
-	root.AddCommand(a.newVersionCmd(), a.newRunCmd(), a.newNextCmd())
+	root.AddCommand(a.newVersionCmd(), a.newRunCmd(), a.newNextCmd(), a.newCtxCmd())
 	return root
 }
 

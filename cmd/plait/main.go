@@ -15,5 +15,11 @@ func main() {
 }
 
 func run() int {
-	return cli.Run(cli.Options{Version: version, Args: os.Args[1:], Stdout: os.Stdout, Stderr: os.Stderr})
+	return cli.Run(cli.Options{
+		Version: version,
+		Args:    os.Args[1:],
+		Stdin:   os.Stdin,
+		Stdout:  os.Stdout,
+		Stderr:  os.Stderr,
+	})
 }

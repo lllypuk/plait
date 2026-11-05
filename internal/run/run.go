@@ -60,6 +60,7 @@ type State struct {
 // Task describes the saved task.md.
 type Task struct {
 	Source      string `json:"source"`
+	Key         string `json:"key,omitempty"`
 	HasCriteria bool   `json:"has_criteria"`
 }
 
@@ -232,11 +233,16 @@ func (s *Store) newID(slug, key string) (string, error) {
 	if key == "" {
 		return s.Now().Format(time.DateOnly) + "-" + slug, nil
 	}
-	if !keyRe.MatchString(key) {
+	if !ValidKey(key) {
 		return "", output.Invalid("invalid_key", fmt.Sprintf("task key %q must look like PROJ-123", key),
 			"plait run new <slug> --key PROJ-123, or drop --key")
 	}
 	return key + "-" + slug, nil
+}
+
+// ValidKey reports whether key looks like a tracker key such as PROJ-123.
+func ValidKey(key string) bool {
+	return keyRe.MatchString(key)
 }
 
 // read returns an error wrapping fs.ErrNotExist when run id has no state.json.
