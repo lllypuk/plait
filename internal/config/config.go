@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
@@ -25,12 +26,26 @@ const envPrefix = "PLAIT_"
 // Config is the merged plait configuration.
 type Config struct {
 	Review Review `yaml:"review"`
+	Audit  Audit  `yaml:"audit"`
+	MR     MR     `yaml:"mr"`
 }
 
 // Review configures review export.
 type Review struct {
-	Base  string   `yaml:"base"`
-	Rules []string `yaml:"rules"`
+	Base         string   `yaml:"base"`
+	Rules        []string `yaml:"rules"`
+	MaxDiffBytes int      `yaml:"max_diff_bytes"`
+	Checks       []string `yaml:"checks"`
+}
+
+// Audit configures the audit log and what never leaves the repository.
+type Audit struct {
+	DenyGlobs []string `yaml:"deny_globs"`
+}
+
+// MR configures mr describe.
+type MR struct {
+	Template string `yaml:"template"`
 }
 
 // Sources lists the layers in ascending priority; a missing or empty file path is skipped.
@@ -146,7 +161,7 @@ func leaves(v reflect.Value, prefix string, out map[string]reflect.Value) {
 	}
 }
 
-// set assigns an env or flag value; a string for a list field is split on commas.
+// set assigns an env or flag value; a string for a list field is split on commas, for an int field parsed as decimal.
 func set(f reflect.Value, v any) error {
 	switch f.Interface().(type) {
 	case string:
@@ -155,6 +170,19 @@ func set(f reflect.Value, v any) error {
 			return fmt.Errorf("want a string, got %T", v)
 		}
 		f.SetString(s)
+	case int:
+		switch x := v.(type) {
+		case int:
+			f.SetInt(int64(x))
+		case string:
+			n, err := strconv.Atoi(x)
+			if err != nil {
+				return fmt.Errorf("want a decimal integer, got %q", x)
+			}
+			f.SetInt(int64(n))
+		default:
+			return fmt.Errorf("want a decimal integer, got %T", v)
+		}
 	case []string:
 		switch x := v.(type) {
 		case string:

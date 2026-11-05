@@ -203,3 +203,105 @@ func TestLoadFlags(t *testing.T) {
 		t.Errorf("unknown flag key: err = %v, want Internal", err)
 	}
 }
+
+const (
+	maxDiffKey = "review.max_diff_bytes"
+	maxDiffEnv = "PLAIT_REVIEW_MAX_DIFF_BYTES"
+)
+
+func TestLoadNewKeyDefaults(t *testing.T) {
+	cfg, err := config.Load(sources(t, layers{}))
+	if err != nil {
+		t.Fatalf("config.Load: %v", err)
+	}
+	if cfg.Review.MaxDiffBytes != 524288 {
+		t.Errorf("review.max_diff_bytes = %d", cfg.Review.MaxDiffBytes)
+	}
+	if len(cfg.Review.Checks) != 0 {
+		t.Errorf("review.checks = %q, want empty", cfg.Review.Checks)
+	}
+	if !slices.Contains(cfg.Audit.DenyGlobs, ".env") || !slices.Contains(cfg.Audit.DenyGlobs, "**/*.pem") {
+		t.Errorf("audit.deny_globs = %q", cfg.Audit.DenyGlobs)
+	}
+	if cfg.MR.Template != "" {
+		t.Errorf("mr.template = %q, want empty", cfg.MR.Template)
+	}
+}
+
+func TestLoadMaxDiffBytes(t *testing.T) {
+	tests := []struct {
+		name string
+		l    layers
+		want int
+	}{
+		{"from file", layers{repo: "review:\n  max_diff_bytes: 1000\n"}, 1000},
+		{"from env", layers{repo: "review:\n  max_diff_bytes: 1000\n", env: []string{maxDiffEnv + "=2000"}}, 2000},
+		{"flag string", layers{env: []string{maxDiffEnv + "=2000"}, flags: map[string]any{maxDiffKey: "3000"}}, 3000},
+		{"flag int", layers{flags: map[string]any{maxDiffKey: 4000}}, 4000},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, err := config.Load(sources(t, tt.l))
+			if err != nil {
+				t.Fatalf("config.Load: %v", err)
+			}
+			if cfg.Review.MaxDiffBytes != tt.want {
+				t.Errorf("review.max_diff_bytes = %d, want %d", cfg.Review.MaxDiffBytes, tt.want)
+			}
+		})
+	}
+}
+
+func TestLoadMaxDiffBytesNotNumber(t *testing.T) {
+	tests := []struct {
+		name   string
+		l      layers
+		source func(config.Sources) string
+	}{
+		{
+			"from file",
+			layers{repo: "review:\n  max_diff_bytes: lots\n"},
+			func(s config.Sources) string { return s.Repo },
+		},
+		{"from env", layers{env: []string{maxDiffEnv + "=lots"}}, func(config.Sources) string { return maxDiffEnv }},
+		{
+			"from flag",
+			layers{flags: map[string]any{maxDiffKey: "1e6"}},
+			func(config.Sources) string { return maxDiffKey },
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := sources(t, tt.l)
+			_, err := config.Load(s)
+			e, ok := errors.AsType[*output.Error](err)
+			if !ok || e.Kind != output.KindInvalid || e.Code != "config_invalid" {
+				t.Fatalf("err = %v, want Invalid config_invalid", err)
+			}
+			if src := tt.source(s); !strings.Contains(e.Message, src) {
+				t.Errorf("message %q must name %s", e.Message, src)
+			}
+		})
+	}
+}
+
+func TestLoadNewListAndStringKeys(t *testing.T) {
+	cfg, err := config.Load(sources(t, layers{
+		system: "review:\n  checks: [test]\naudit:\n  deny_globs: [a]\nmr:\n  template: sys.tmpl\n",
+		repo:   "review:\n  checks: [test, lint]\n",
+		env:    []string{"PLAIT_AUDIT_DENY_GLOBS=**/*.pem,.env"},
+		flags:  map[string]any{"mr.template": ".plait/mr.tmpl"},
+	}))
+	if err != nil {
+		t.Fatalf("config.Load: %v", err)
+	}
+	if !slices.Equal(cfg.Review.Checks, []string{"test", "lint"}) {
+		t.Errorf("review.checks = %q", cfg.Review.Checks)
+	}
+	if !slices.Equal(cfg.Audit.DenyGlobs, []string{"**/*.pem", ".env"}) {
+		t.Errorf("audit.deny_globs = %q", cfg.Audit.DenyGlobs)
+	}
+	if cfg.MR.Template != ".plait/mr.tmpl" {
+		t.Errorf("mr.template = %q", cfg.MR.Template)
+	}
+}
