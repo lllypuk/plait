@@ -1,0 +1,48 @@
+# quorum-ai
+
+Разобрано 2026-11-05: репозиторий [hugo-lorenzo-mato/quorum-ai](https://github.com/hugo-lorenzo-mato/quorum-ai) на коммите `cd0dd78` (2026-04-13, последний push на дату разбора). Релизов на GitHub нет, хотя README предлагает ставить из них; 2 звезды. Ссылки на код ниже ведут на этот коммит.
+
+## Что делает
+
+Внешний оркестратор: человек запускает `quorum run "<задача>"`, а quorum сам вызывает установленные CLI агентов и ведёт задачу через фазы refine → analyze → plan → execute ([README](https://github.com/hugo-lorenzo-mato/quorum-ai/blob/cd0dd78fac9ba53e18f8ea1f51b75f980e24c9bd/README.md)). Внутри сессии агента не живёт: агент для него — подпроцесс.
+
+- **Архитектура:** гексагональная, порты `Agent`, `StateManager`, `GitClient`; входы CLI (Cobra), TUI (Bubbletea), веб-панель на React с REST и SSE; состояние в SQLite ([ARCHITECTURE.md](https://github.com/hugo-lorenzo-mato/quorum-ai/blob/cd0dd78fac9ba53e18f8ea1f51b75f980e24c9bd/docs/ARCHITECTURE.md), [ADR-0009](https://github.com/hugo-lorenzo-mato/quorum-ai/blob/cd0dd78fac9ba53e18f8ea1f51b75f980e24c9bd/docs/adr/0009-sqlite-state-backend.md)).
+- **Запуск агентов:** адаптер на каждый CLI — Claude Code, Gemini CLI, Codex, Copilot, OpenCode. Агент получает промпт в headless-режиме, пишет результат в файл, quorum читает stdout в потоковом JSON для прогресса ([adapters/cli](https://github.com/hugo-lorenzo-mato/quorum-ai/tree/cd0dd78fac9ba53e18f8ea1f51b75f980e24c9bd/internal/adapters/cli)). Права у всех агентов полные, в том числе на фазе анализа: Claude с `--dangerously-skip-permissions` ([claude.go#L172](https://github.com/hugo-lorenzo-mato/quorum-ai/blob/cd0dd78fac9ba53e18f8ea1f51b75f980e24c9bd/internal/adapters/cli/claude.go#L172)), Gemini с `--approval-mode yolo` ([gemini.go#L118](https://github.com/hugo-lorenzo-mato/quorum-ai/blob/cd0dd78fac9ba53e18f8ea1f51b75f980e24c9bd/internal/adapters/cli/gemini.go#L118)), Copilot с `--allow-all-tools --allow-all-paths --allow-all-urls` ([copilot.go#L260](https://github.com/hugo-lorenzo-mato/quorum-ai/blob/cd0dd78fac9ba53e18f8ea1f51b75f980e24c9bd/internal/adapters/cli/copilot.go#L260-L264)). Codex идёт с `approval_policy="never"`, sandbox флагом не задаётся и берётся из конфига Codex пользователя ([codex.go#L114](https://github.com/hugo-lorenzo-mato/quorum-ai/blob/cd0dd78fac9ba53e18f8ea1f51b75f980e24c9bd/internal/adapters/cli/codex.go#L114)); итоговый режим — не проверено.
+- **Сведение мнений** — только на фазе analyze ([ADR-0002](https://github.com/hugo-lorenzo-mato/quorum-ai/blob/cd0dd78fac9ba53e18f8ea1f51b75f980e24c9bd/docs/adr/0002-consensus-protocol.md)). Агенты независимо пишут анализ V1, затем читают чужие и дописывают V2…V(n). После каждого раунда агент-модератор ставит `consensus_score` 0–100 и считает расхождения по весам high/medium/low: архитектура и безопасность весят больше нейминга ([moderator-evaluate.md.tmpl](https://github.com/hugo-lorenzo-mato/quorum-ai/blob/cd0dd78fac9ba53e18f8ea1f51b75f980e24c9bd/internal/service/prompts/moderator-evaluate.md.tmpl#L64-L113)). Порог по умолчанию 0.90, от 2 до 5 раундов, стоп при стагнации. Агент-синтезатор затем пишет `consolidated.md`.
+- **Формат результатов:** Markdown-отчёты в `.quorum/runs/<run>/` — по файлу на агента и раунд, `consensus/round-N.md`, `consolidated.md`, план и сводка исполнения ([WORKFLOW_REPORTS.md](https://github.com/hugo-lorenzo-mato/quorum-ai/blob/cd0dd78fac9ba53e18f8ea1f51b75f980e24c9bd/docs/WORKFLOW_REPORTS.md)). Машиночитаемы только YAML-frontmatter модератора и trace (`run.json`, `trace.jsonl` с токенами и хэшами). Frontmatter модератор пишет по просьбе промпта, а quorum разбирает его с цепочкой regex-фолбэков на случай, если формат нарушен ([moderator.go#L487](https://github.com/hugo-lorenzo-mato/quorum-ai/blob/cd0dd78fac9ba53e18f8ea1f51b75f980e24c9bd/internal/service/workflow/moderator.go#L487-L601)). Схемы и отказа на невалидный ответ нет.
+- **Ревью кода** отдельной фазой нет. Консенсус ищется по анализу задачи до кода; результат execute никто, кроме человека, не проверяет.
+- **Гейты:** порядок фаз задаёт Go-код раннера. В интерактивном режиме раннер останавливается после analyze и после plan и ждёт, пока человек одобрит или отклонит ([runner.go#L438](https://github.com/hugo-lorenzo-mato/quorum-ai/blob/cd0dd78fac9ba53e18f8ea1f51b75f980e24c9bd/internal/service/workflow/runner.go#L438-L458)). Проверка качества результата эвристическая: отсечь пустой или «болтовню» вместо анализа ([output_quality.go](https://github.com/hugo-lorenzo-mato/quorum-ai/blob/cd0dd78fac9ba53e18f8ea1f51b75f980e24c9bd/internal/service/workflow/output_quality.go)). Задачи execute идут в отдельных git worktree ([ADR-0004](https://github.com/hugo-lorenzo-mato/quorum-ai/blob/cd0dd78fac9ba53e18f8ea1f51b75f980e24c9bd/docs/adr/0004-worktree-isolation.md)).
+- **MR/PR:** только GitHub через `gh`. Финализатор по флагам конфига коммитит, пушит, создаёт PR и может сам его смержить ([finalizer.go#L64](https://github.com/hugo-lorenzo-mato/quorum-ai/blob/cd0dd78fac9ba53e18f8ea1f51b75f980e24c9bd/internal/service/workflow/finalizer.go#L64-L102)). Описание PR — название и описание задачи по шаблону, без находок и результатов проверок ([finalizer.go#L156](https://github.com/hugo-lorenzo-mato/quorum-ai/blob/cd0dd78fac9ba53e18f8ea1f51b75f980e24c9bd/internal/service/workflow/finalizer.go#L156-L174)).
+- **GitLab:** есть в конфиге генерации issues, но в коде возвращает «not yet implemented» ([issues.go#L979](https://github.com/hugo-lorenzo-mato/quorum-ai/blob/cd0dd78fac9ba53e18f8ea1f51b75f980e24c9bd/internal/api/issues.go#L979-L980)).
+
+## Стек, окружение, лицензия
+
+- Go 1.25, `CGO_ENABLED=0`, SQLite через `modernc.org/sqlite` без cgo ([Makefile#L10](https://github.com/hugo-lorenzo-mato/quorum-ai/blob/cd0dd78fac9ba53e18f8ea1f51b75f980e24c9bd/Makefile#L10), [go.mod](https://github.com/hugo-lorenzo-mato/quorum-ai/blob/cd0dd78fac9ba53e18f8ea1f51b75f980e24c9bd/go.mod)). Нужны git ≥ 2.20 и хотя бы один CLI агента; для PR — `gh`.
+- Сеть: сам quorum ходит только через CLI агентов и `gh`. Телеметрии и update-check в `internal/` и `cmd/` не нашёл (поиск по `telemetry`, `analytics`, `posthog`, `sentry`, `update check`). Веб-панель `quorum serve` по умолчанию слушает `localhost` ([serve.go#L61](https://github.com/hugo-lorenzo-mato/quorum-ai/blob/cd0dd78fac9ba53e18f8ea1f51b75f980e24c9bd/cmd/quorum/cmd/serve.go#L61)). Прокси и корпоративный CA — не проверено, свой HTTP-клиент quorum почти не использует.
+- **Лицензия MIT** ([LICENSE](https://github.com/hugo-lorenzo-mato/quorum-ai/blob/cd0dd78fac9ba53e18f8ea1f51b75f980e24c9bd/LICENSE)). Совместима с plait: брать можно и идеи, и код, с сохранением копирайта в заимствованных файлах. Брать есть смысл узкие куски вроде разбора потокового вывода CLI, а не архитектуру.
+
+## Что взять
+
+- **Взвешенные расхождения.** Делить расхождения ревьюеров по весу (безопасность и логика против нейминга) — готовая шкала для сведённого отчёта на этапе 2.
+- **Урок про формат.** Цепочка regex-фолбэков вокруг frontmatter показывает, что агенты регулярно нарушают формат ответа. plait отвечает на это строже: схема `review-verdict/v1`, код выхода 2 и текст ошибки с командой исправления, а не попытка угадать.
+- **Trace-манифест:** `run.json` с версией, коммитом, `git_dirty` и токенами и `trace.jsonl` с хэшами промптов. Почти готовый формат журнала для замера 1 — время, стоимость и привязка к снимку без нового интерфейса.
+- **Флаги headless-режима** в адаптерах — справочник того, как каждый CLI запускается без вопросов. Для read-only ревьюера plait нужно обратное: те же CLI с запретом записи.
+- **Отсев «болтовни» вместо результата** (`output_quality.go`): Codex при обрыве оставляет в stdout план действий вместо ответа. Для plait это ещё один случай невалидного артефакта.
+
+## Применимо к этапу 2 (второе мнение, сведённый отчёт)
+
+- Второе мнение в quorum — равноправные агенты на одной задаче и третий агент-судья. Для ревью это дорого: при пороге 0.90 нужно минимум 2 раунда на каждого агента плюс модератор и синтезатор. Для этапа 2 дешевле один независимый прогон второго агента на тот же снимок и сведение находок кодом plait по месту в диффе, без раундов.
+- Судью-модель для сведения, если он понадобится, plait запускает в режиме только чтения. Его вывод — по той же схеме, что вердикт ревьюера.
+- Score консенсуса не переносим: для ревью полезнее, кто какую находку нашёл и что подтвердил человек, чем одно число согласия.
+
+## Пересечение с v0
+
+| v0 | quorum-ai | Разница |
+| --- | --- | --- |
+| `ctx`: агент работает от критериев приёмки | Фазы refine и analyze сами переписывают задачу и строят анализ | Другая модель: quorum — снаружи сессии и заменяет её, plait — внутри сессии агента |
+| `review` в свежей сессии | Нет; консенсус только по анализу до кода | Не покрыто |
+| `mr describe` | PR в GitHub из названия и описания задачи | Описание не опирается на ревью и проверки; GitLab нет |
+
+## Вывод
+
+Для v0 отличие подтверждается полностью: quorum-ai не ревьюит дифф, не собирает описание MR из находок и не работает с GitLab. Это другой класс инструмента — внешний оркестратор, который запускает агентов с полными правами и сам ведёт задачу до PR и merge, а не помощник внутри сессии разработчика. Строка брифа верна. Пересечение появится на этапе 2: идея нескольких агентов и сведённого отчёта у quorum уже есть, но построена вокруг анализа задачи и судьи-модели, а не вокруг находок ревью, подтверждаемых человеком. Проект маленький, без релизов, последний коммит в апреле 2026, так что как конкурента его можно не считать, а как источник идей под MIT — использовать.
