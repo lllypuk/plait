@@ -1,0 +1,8 @@
+# --json prints the envelope
+exec plait version --json
+stdout '^\{"ok":true,"data":\{"version":"dev"\}\}$'
+! stderr .
+
+# stdout is not a terminal here, so JSON is the default
+exec plait version
+stdout '^\{"ok":true,"data":\{"version":"dev"\}\}$'

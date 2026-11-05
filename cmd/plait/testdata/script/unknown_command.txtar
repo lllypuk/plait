@@ -1,0 +1,9 @@
+# unknown command is a usage error: exit 2, error envelope on stdout with a fix command
+exitcode 2 plait frobnicate
+stdout '^\{"ok":false,"error":\{"code":"usage","message":"unknown command \\"frobnicate\\" for \\"plait\\"","fix":"plait --help"\}\}$'
+! stderr .
+
+# bad args of a known command point to that command's help
+exitcode 2 plait version extra
+stdout '"code":"usage"'
+stdout '"fix":"plait version --help"'

@@ -11,7 +11,9 @@ import (
 var version string
 
 func main() {
-	if err := cli.NewRoot(version).Execute(); err != nil {
-		os.Exit(1)
-	}
+	os.Exit(run())
+}
+
+func run() int {
+	return cli.Run(cli.Options{Version: version, Args: os.Args[1:], Stdout: os.Stdout, Stderr: os.Stderr})
 }
