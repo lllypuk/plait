@@ -6,11 +6,18 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/lllypuk/plait/internal/output"
 	"github.com/lllypuk/plait/internal/vcs"
+)
+
+const (
+	aTxt = "a.txt"
+	bTxt = "b.txt"
+	fTxt = "f.txt"
 )
 
 func gitEnv(t *testing.T) {
@@ -100,7 +107,7 @@ func TestSnapshotContent(t *testing.T) {
 	}
 
 	files := strings.Fields(git(t, dir, "ls-tree", "-r", "--name-only", s.Commit))
-	if want := []string{".gitignore", "a.txt", "new.txt", "staged.txt"}; !slices.Equal(files, want) {
+	if want := []string{".gitignore", aTxt, "new.txt", "staged.txt"}; !slices.Equal(files, want) {
 		t.Errorf("files = %v, want %v", files, want)
 	}
 	if got := git(t, dir, "show", s.Commit+":a.txt"); got != "a changed" {
@@ -380,4 +387,77 @@ func TestNoHead(t *testing.T) {
 	git(t, dir, "init", "-q", "-b", "main")
 	_, err = r.Snapshot(t.Context(), "")
 	wantKind(t, err, "no_head")
+}
+
+func lines(from, to int) string {
+	var b strings.Builder
+	for i := from; i <= to; i++ {
+		b.WriteString("l" + strconv.Itoa(i) + "\n")
+	}
+	return b.String()
+}
+
+func TestMapLine(t *testing.T) {
+	dir := newRepo(t, "main")
+	write(t, dir, fTxt, lines(1, 10))
+	write(t, dir, "g.txt", lines(1, 20))
+	write(t, dir, "h.txt", lines(1, 20))
+	c0 := commit(t, dir, "base")
+
+	write(t, dir, fTxt, lines(1, 2)+"x\ny\n"+lines(3, 4)+"L5\n"+lines(6, 6)+lines(8, 10))
+	c1 := commit(t, dir, "edit f")
+
+	git(t, dir, "mv", "g.txt", "g2.txt")
+	git(t, dir, "rm", "-q", "a.txt")
+	c2 := commit(t, dir, "rename g, delete a")
+
+	git(t, dir, "mv", "h.txt", "h2.txt")
+	write(t, dir, "h2.txt", "top\n"+lines(1, 20))
+	c3 := commit(t, dir, "rename and edit h")
+
+	tests := []struct {
+		name     string
+		old, new string
+		file     string
+		line     int
+		want     vcs.Location
+	}{
+		{"line above the edit stays", c0, c1, fTxt, 1, vcs.Location{fTxt, 1, vcs.LineUnchanged}},
+		{"line below an insertion shifts", c0, c1, fTxt, 3, vcs.Location{fTxt, 5, vcs.LineUnchanged}},
+		{"replaced line", c0, c1, fTxt, 5, vcs.Location{fTxt, 7, vcs.LineChanged}},
+		{"deleted line", c0, c1, fTxt, 7, vcs.Location{fTxt, 8, vcs.LineChanged}},
+		{"line below a deletion shifts", c0, c1, fTxt, 8, vcs.Location{fTxt, 9, vcs.LineUnchanged}},
+		{"last line", c0, c1, fTxt, 10, vcs.Location{fTxt, 11, vcs.LineUnchanged}},
+		{"file deleted", c1, c2, "a.txt", 1, vcs.Location{State: vcs.LineGone}},
+		{"whole deleted file", c1, c2, "a.txt", 0, vcs.Location{State: vcs.LineGone}},
+		{"pure rename", c1, c2, "g.txt", 4, vcs.Location{"g2.txt", 4, vcs.LineUnchanged}},
+		{"pure rename, whole file", c1, c2, "g.txt", 0, vcs.Location{"g2.txt", 0, vcs.LineUnchanged}},
+		{"rename with edit shifts", c2, c3, "h.txt", 4, vcs.Location{"h2.txt", 5, vcs.LineUnchanged}},
+		{"rename with edit, whole file", c2, c3, "h.txt", 0, vcs.Location{"h2.txt", 0, vcs.LineChanged}},
+		{"whole changed file", c0, c1, fTxt, 0, vcs.Location{fTxt, 0, vcs.LineChanged}},
+		{"whole untouched file", c0, c1, bTxt, 0, vcs.Location{bTxt, 0, vcs.LineUnchanged}},
+		{"untouched file", c0, c3, bTxt, 1, vcs.Location{bTxt, 1, vcs.LineUnchanged}},
+		{"same snapshot", c1, c1, fTxt, 5, vcs.Location{fTxt, 5, vcs.LineUnchanged}},
+	}
+	r := vcs.Repo{Root: dir}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := r.MapLine(t.Context(), tt.old, tt.new, tt.file, tt.line)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tt.want {
+				t.Errorf("MapLine(%s:%d) = %+v, want %+v", tt.file, tt.line, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMapLineBadCommit(t *testing.T) {
+	dir := newRepo(t, "main")
+	head := git(t, dir, "rev-parse", "HEAD")
+	_, err := vcs.Repo{Root: dir}.MapLine(t.Context(), head, "0000000000000000000000000000000000000000", "a.txt", 1)
+	if e, ok := errors.AsType[*output.Error](err); !ok || e.Kind != output.KindInternal {
+		t.Fatalf("err = %#v, want Internal", err)
+	}
 }

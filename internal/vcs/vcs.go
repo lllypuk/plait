@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -24,6 +25,9 @@ const (
 	numstatFields = 3
 	baseFix       = "pass --base <branch> to plait review export or set review.base in .plait/config.yaml"
 )
+
+// hunkHeader matches "@@ -a[,b] +c[,d] @@"; an omitted count is 1.
+var hunkHeader = regexp.MustCompile(`^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@`)
 
 // literalPathspecs keeps file names with glob characters from matching other files.
 var literalPathspecs = []string{"GIT_LITERAL_PATHSPECS=1"} //nolint:gochecknoglobals // constant env slice
@@ -193,6 +197,130 @@ func parseNumstat(out string) ([]FileDiff, error) {
 		i += 2
 	}
 	return files, nil
+}
+
+// LineState says what happened to a line between two snapshots.
+type LineState string
+
+// Line states of MapLine.
+const (
+	LineUnchanged LineState = "unchanged"
+	LineChanged   LineState = "changed"
+	LineGone      LineState = "gone"
+)
+
+// Location is where a line of an old snapshot is in a new one; Line 0 stands for the whole file.
+// For LineChanged, Line is the start of the hunk that replaced it; for LineGone, File is empty.
+type Location struct {
+	File  string
+	Line  int
+	State LineState
+}
+
+// MapLine follows file:line from commit from to commit to, renames included.
+func (r Repo) MapLine(ctx context.Context, from, to, file string, line int) (Location, error) {
+	out, err := r.git(ctx, literalPathspecs, "diff", "-M", "--name-status", "-z", from, to, "--")
+	if err != nil {
+		return Location{}, err
+	}
+	c := findChange(out, file)
+	switch c.status {
+	case "":
+		return Location{File: file, Line: line, State: LineUnchanged}, nil
+	case "D":
+		return Location{State: LineGone}, nil
+	case "R100":
+		return Location{File: c.newPath, Line: line, State: LineUnchanged}, nil
+	}
+	args := []string{
+		"diff", "-U0", "-M", "--text", "--no-color", "--no-ext-diff", "--no-textconv", from, to, "--", c.newPath,
+	}
+	if c.oldPath != c.newPath {
+		args = append(args, c.oldPath)
+	}
+	diff, err := r.git(ctx, literalPathspecs, args...)
+	if err != nil {
+		return Location{}, err
+	}
+	loc := mapHunks(diff, line)
+	loc.File = c.newPath
+	return loc, nil
+}
+
+// change is a --name-status record; status is empty when the file did not change.
+type change struct {
+	status, oldPath, newPath string
+}
+
+// findChange returns the --name-status -z record whose old path is file.
+func findChange(out, file string) change {
+	tokens := strings.Split(strings.TrimSuffix(out, "\x00"), "\x00")
+	for i := 0; i+1 < len(tokens); i += 2 {
+		st, path := tokens[i], tokens[i+1]
+		if st != "" && (st[0] == 'R' || st[0] == 'C') {
+			if i+2 >= len(tokens) {
+				break
+			}
+			if path == file && st[0] == 'R' {
+				return change{st, path, tokens[i+2]}
+			}
+			i++
+			continue
+		}
+		if path == file {
+			return change{st, path, path}
+		}
+	}
+	return change{"", file, file}
+}
+
+// mapHunks shifts line by the -U0 hunks before it, or reports the hunk that covers it.
+func mapHunks(diff string, line int) Location {
+	offset, hunks := 0, 0
+	for h := range strings.SplitSeq(diff, "\n") {
+		m := hunkHeader.FindStringSubmatch(h)
+		if m == nil {
+			continue
+		}
+		hunks++
+		if line == 0 {
+			break
+		}
+		oldStart, oldCount := atoi(m[1]), countOf(m[2])
+		newStart, newCount := atoi(m[3]), countOf(m[4])
+		if oldCount == 0 {
+			// A pure insertion goes after oldStart.
+			if line <= oldStart {
+				break
+			}
+			offset += newCount
+			continue
+		}
+		if line < oldStart {
+			break
+		}
+		if line < oldStart+oldCount {
+			return Location{Line: max(newStart, 1), State: LineChanged}
+		}
+		offset += newCount - oldCount
+	}
+	if line == 0 && hunks > 0 {
+		return Location{State: LineChanged}
+	}
+	return Location{Line: line + offset, State: LineUnchanged}
+}
+
+func countOf(s string) int {
+	if s == "" {
+		return 1
+	}
+	return atoi(s)
+}
+
+// atoi parses digits the hunk regexp already matched.
+func atoi(s string) int {
+	n, _ := strconv.Atoi(s)
+	return n
 }
 
 func (r Repo) head(ctx context.Context) (string, error) {
