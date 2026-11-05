@@ -29,6 +29,7 @@ plait assists the process; it does not enforce it. An agent can edit code withou
 
 - [Product brief](docs/plait-brief.md)
 - [Development plan](docs/development-plan.md)
+- [Measurement 1 protocol](docs/pilot/measurement-1.md)
 
 ## License
 

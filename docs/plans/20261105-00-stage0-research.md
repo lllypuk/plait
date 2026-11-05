@@ -67,8 +67,8 @@
 
 ### Task 6: [Final] Update documentation
 
-- [ ] в `docs/development-plan.md`, этап 0 — ссылки на `docs/research/README.md` и `docs/pilot/measurement-1.md`
-- [ ] в `README.md`, раздел «Docs» — ссылка на протокол замера
+- [x] в `docs/development-plan.md`, этап 0 — ссылки на `docs/research/README.md` и `docs/pilot/measurement-1.md`
+- [x] в `README.md`, раздел «Docs» — ссылка на протокол замера
 
 ## Post-Completion
 
