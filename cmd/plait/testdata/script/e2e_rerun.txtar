@@ -1,0 +1,167 @@
+# two review rounds with a fix in between: findings keep their keys, verdicts set their statuses, the MR is described from the run
+env GIT_CONFIG_NOSYSTEM=1
+env GIT_AUTHOR_NAME=dev GIT_AUTHOR_EMAIL=dev@example.com GIT_COMMITTER_NAME=dev GIT_COMMITTER_EMAIL=dev@example.com
+mkdir repo
+cd repo
+exec git init -q -b main
+cp ../retry.go retry.go
+exec git add -A
+exec git commit -q -m init
+exec git checkout -q -b feature
+
+exec plait run new order-retry --key PROJ-7 --json
+stdout '"step":"new"'
+exec plait next --json
+stdout '"step":"new".*"output":\{"cmd":"plait ctx save < task.md"\}'
+
+stdin ../task.md
+exec plait ctx save PROJ-7 --json
+stdout '"step":"task_saved"'
+exec plait next --json
+stdout '"step":"task_saved".*"output":\{"cmd":"plait review export"\}'
+
+# round 1: two findings on a fresh snapshot with a fresh test run
+cp ../retry1.go retry.go
+cp ../log.go log.go
+exec plait check save test --exit-code 0 --file ../test.log --json
+stdout '"exit_code":0,.*"step":"task_saved"'
+exec plait next --json
+stdout '"step":"task_saved".*"output":\{"cmd":"plait review export"\}'
+
+exec plait review export --json
+stdout '"snapshot":1,.*"step":"exported","coverage_gaps":\[\]'
+capture SNAPSHOT '"commit":"([0-9a-f]{40})"'
+exec plait next --json
+stdout '"step":"exported".*"inputs":\[".plait/runs/PROJ-7-order-retry/review-1/package.md"\]'
+! grep '^## Previous findings' .plait/runs/PROJ-7-order-retry/review-1/package.md
+grep '^### test: fresh, exit code 0' .plait/runs/PROJ-7-order-retry/review-1/package.md
+
+expand ../answer1.json ../answer1-ok.json
+exec plait review import ../answer1-ok.json --json
+stdout '"snapshot":1,.*"findings":2,.*"step":"imported"'
+exec plait next --json
+stdout '"step":"imported".*"output":\{"cmd":"plait review report"\}'
+
+exec plait review report --json
+stdout '"counts":\{"new":2,"open":0,"region_changed":0,"outdated":0,"fix_confirmed":0\},"blocking":1'
+exec plait next --json
+stdout '"step":"reported".*"output":\{"cmd":"plait review export"\}'
+
+# round 2: the retry region is rewritten; the reviewer confirms one fix and keeps the other finding open
+cp ../retry2.go retry.go
+exec plait check save test --exit-code 0 --file ../test.log --json
+stdout '"step":"reported"'
+exec plait review export --json
+stdout '"snapshot":2,.*"step":"exported","coverage_gaps":\[\]'
+capture SNAPSHOT '"commit":"([0-9a-f]{40})"'
+exec plait next --json
+stdout '"step":"exported".*"inputs":\[".plait/runs/PROJ-7-order-retry/review-2/package.md"\]'
+grep '## Previous findings' .plait/runs/PROJ-7-order-retry/review-2/package.md
+grep '### `R1-F1`, major' .plait/runs/PROJ-7-order-retry/review-2/package.md
+grep 'In this snapshot: `retry.go:4`, region changed' .plait/runs/PROJ-7-order-retry/review-2/package.md
+grep 'In this snapshot: `log.go:3`$' .plait/runs/PROJ-7-order-retry/review-2/package.md
+
+expand ../answer2.json ../answer2-ok.json
+exec plait review import ../answer2-ok.json --json
+stdout '"snapshot":2,.*"findings":0,.*"step":"imported"'
+exec plait next --json
+stdout '"step":"imported".*"inputs":\[".plait/runs/PROJ-7-order-retry/review-2.json"\]'
+
+exec plait review report --json
+stdout '"counts":\{"new":0,"open":1,"region_changed":0,"outdated":0,"fix_confirmed":1\},"blocking":0'
+stdout '\{"key":"R1-F2".*"status":"open","history":\[\{"review":1,"status":"new"\},\{"review":2,"status":"open","verdict":"still_open"'
+stdout '\{"key":"R1-F1".*"status":"fix_confirmed","history":\[\{"review":1,"status":"new"\},\{"review":2,"status":"fix_confirmed","verdict":"fixed"'
+exec plait next --json
+stdout '"step":"reported".*"output":\{"cmd":"plait mr describe"\}'
+
+exec plait mr describe --json
+stdout '"snapshot":2,"title":"PROJ-7: Retry failed orders"'
+stdout '- a failed order is retried 3 times\\n- every retry is logged — \*\*flagged\*\*'
+stdout 'Findings: 0 new, 1 open, 0 region changed, 0 outdated, 1 fix confirmed'
+stdout '- test: exit 0, fresh'
+stdout '"stale":false,"changed":true,"step":"described"'
+exec plait next --json
+stdout '"step":"described".*"inputs":\[".plait/runs/PROJ-7-order-retry/mr.md"\]'
+
+# round 3: the file of the open finding is deleted and the reviewer gives no verdict, so the finding is outdated, not fixed
+rm log.go
+exec plait review export --json
+stdout '"snapshot":3,.*"coverage_gaps":\[\{"code":"checks_stale","items":\["test"\]\}\]'
+capture SNAPSHOT '"commit":"([0-9a-f]{40})"'
+exec plait next --json
+stdout '"step":"exported".*"inputs":\[".plait/runs/PROJ-7-order-retry/review-3/package.md"\]'
+grep 'In this snapshot: file deleted' .plait/runs/PROJ-7-order-retry/review-3/package.md
+! grep 'R1-F1' .plait/runs/PROJ-7-order-retry/review-3/package.md
+
+expand ../answer3.json ../answer3-ok.json
+exec plait review import ../answer3-ok.json --json
+stdout '"snapshot":3,.*"step":"imported"'
+exec plait next --json
+stdout '"step":"imported"'
+
+exec plait review report --json
+stdout '"counts":\{"new":0,"open":0,"region_changed":0,"outdated":1,"fix_confirmed":0\}'
+stdout '\{"key":"R1-F2".*"state":"gone".*"status":"outdated".*\{"review":3,"status":"outdated","verdict":"not_checked"\}'
+exec plait next --json
+stdout '"step":"reported".*"output":\{"cmd":"plait mr describe"\}'
+
+# the rounds never touch the developer's index
+exec git diff --cached --name-only
+! stdout .
+
+-- retry.go --
+package retry
+-- retry1.go --
+package retry
+
+func Retry() {
+	do()
+}
+-- retry2.go --
+package retry
+
+func Retry() {
+	for range 3 {
+		do()
+	}
+}
+-- log.go --
+package retry
+
+func log() {}
+-- test.log --
+ok
+-- task.md --
+# Retry failed orders
+
+Retry orders that failed.
+
+## Acceptance criteria
+
+- a failed order is retried 3 times
+- every retry is logged
+-- answer1.json --
+{
+  "snapshot": "$SNAPSHOT",
+  "coverage": "criteria",
+  "findings": [
+    {"id": "F1", "severity": "major", "file": "retry.go", "line": 4, "title": "no retry", "rationale": "do runs once", "criterion": "a failed order is retried 3 times"},
+    {"id": "F2", "severity": "minor", "file": "log.go", "line": 3, "title": "log is empty", "rationale": "nothing is logged", "criterion": "every retry is logged"}
+  ]
+}
+-- answer2.json --
+{
+  "snapshot": "$SNAPSHOT",
+  "coverage": "criteria",
+  "findings": [],
+  "previous": [
+    {"key": "R1-F1", "verdict": "fixed", "note": "do runs in a loop of 3"},
+    {"key": "R1-F2", "verdict": "still_open", "note": "log is still empty"}
+  ]
+}
+-- answer3.json --
+{
+  "snapshot": "$SNAPSHOT",
+  "coverage": "criteria",
+  "findings": []
+}
