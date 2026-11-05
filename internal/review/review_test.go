@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lllypuk/plait/internal/check"
 	"github.com/lllypuk/plait/internal/config"
 	"github.com/lllypuk/plait/internal/output"
 	"github.com/lllypuk/plait/internal/review"
@@ -34,14 +35,26 @@ const (
 	badGlob       = "[bad"
 	docsDir       = "docs"
 	bigGo         = "big.go"
+	runID         = "2026-11-05-order-retry"
+	checkLint     = "lint"
+	checkVet      = "vet"
+	checkBuild    = "build"
 	diffText      = "diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-a\n+a changed\n"
 )
 
+type renderCase struct {
+	name string
+	p    review.Package
+}
+
 func TestRenderGolden(t *testing.T) {
-	cases := []struct {
-		name string
-		p    review.Package
-	}{
+	for _, tc := range renderCases() {
+		renderGolden(t, tc)
+	}
+}
+
+func renderCases() []renderCase {
+	return []renderCase{
 		{
 			"criteria",
 			review.Package{
@@ -61,7 +74,7 @@ func TestRenderGolden(t *testing.T) {
 		{
 			"diff_only",
 			review.Package{
-				Run:      "2026-11-05-order-retry",
+				Run:      runID,
 				N:        1,
 				Commit:   commitID,
 				Base:     baseID,
@@ -74,7 +87,7 @@ func TestRenderGolden(t *testing.T) {
 		{
 			"scoped",
 			review.Package{
-				Run:      "2026-11-05-order-retry",
+				Run:      runID,
 				N:        1,
 				Commit:   commitID,
 				Base:     baseID,
@@ -94,28 +107,54 @@ func TestRenderGolden(t *testing.T) {
 				},
 			},
 		},
+		{
+			"checks",
+			review.Package{
+				Run:      runID,
+				N:        1,
+				Commit:   commitID,
+				Base:     baseID,
+				Coverage: review.CoverageDiffOnly,
+				Task:     "# Retry failed orders\n",
+				Rules:    []review.Rule{},
+				Diff:     diffText,
+				Checks: []review.Check{
+					{Name: "test", State: review.CheckFresh, Output: "ok  \texample.com/orders\t0.01s\n"},
+					{Name: checkLint, State: review.CheckFresh, ExitCode: 1, Output: "a.go:3:1: unused (unused)\n"},
+					{Name: checkVet, State: review.CheckStale, ExitCode: 2},
+					{Name: checkBuild, State: review.CheckMissing},
+				},
+				Gaps: []run.Gap{
+					{Code: review.GapChecksMissing, Items: []string{checkBuild}},
+					{Code: review.GapChecksFailed, Items: []string{checkLint}},
+					{Code: review.GapChecksStale, Items: []string{checkVet}},
+				},
+			},
+		},
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got, err := review.Render(tc.p)
-			if err != nil {
+}
+
+func renderGolden(t *testing.T, tc renderCase) {
+	t.Helper()
+	t.Run(tc.name, func(t *testing.T) {
+		got, err := review.Render(tc.p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		golden := filepath.Join("testdata", "package-"+tc.name+".golden")
+		if *update {
+			if err = os.WriteFile(golden, got, 0o600); err != nil {
 				t.Fatal(err)
 			}
-			golden := filepath.Join("testdata", "package-"+tc.name+".golden")
-			if *update {
-				if err = os.WriteFile(golden, got, 0o600); err != nil {
-					t.Fatal(err)
-				}
-			}
-			want, err := os.ReadFile(golden)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if string(got) != string(want) {
-				t.Errorf("package.md differs from %s (rerun with -update):\n%s", golden, got)
-			}
-		})
-	}
+		}
+		want, err := os.ReadFile(golden)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != string(want) {
+			t.Errorf("package.md differs from %s (rerun with -update):\n%s", golden, got)
+		}
+	})
 }
 
 func TestLoadRules(t *testing.T) {
@@ -319,6 +358,72 @@ func TestExportScope(t *testing.T) {
 	cfg.Audit.DenyGlobs = []string{badGlob}
 	_, err = review.Export(t.Context(), s, repo, cfg)
 	wantInvalid(t, err, "config_invalid")
+}
+
+func TestExportChecks(t *testing.T) {
+	dir := newRepo(t)
+	git(t, dir, "checkout", "-q", "-b", "feature")
+	write(t, dir, "a.txt", "a changed\n")
+	s := run.Open(dir)
+	repo := vcs.Repo{Root: dir}
+	if _, _, err := s.New("order-retry", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := task.Save(s, task.Input{Text: []byte("# Retry\n"), Source: task.DefaultSource}); err != nil {
+		t.Fatal(err)
+	}
+	save := func(name string, code int, out string) {
+		t.Helper()
+		in := check.Input{Name: name, ExitCode: code, Output: []byte(out)}
+		if _, err := check.Save(t.Context(), s, repo, in); err != nil {
+			t.Fatal(err)
+		}
+	}
+	save(checkLint, 1, "STALE-LINT-MARKER\n")
+	write(t, dir, "a.txt", "a changed again\n")
+	save("test", 0, "FRESH-TEST-MARKER\n")
+	save(checkVet, 2, "FRESH-VET-MARKER\n")
+
+	cfg := config.Config{Review: config.Review{Checks: []string{"test", checkLint, checkBuild}}}
+	res, err := review.Export(t.Context(), s, repo, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantGaps := []run.Gap{
+		{Code: review.GapChecksMissing, Items: []string{checkBuild}},
+		{Code: review.GapChecksFailed, Items: []string{checkVet}},
+		{Code: review.GapChecksStale, Items: []string{checkLint}},
+	}
+	if !reflect.DeepEqual(res.Gaps, wantGaps) {
+		t.Errorf("gaps = %+v, want %+v", res.Gaps, wantGaps)
+	}
+	pkg := read(t, filepath.Join(dir, res.Package))
+	for _, want := range []string{"### test: fresh, exit code 0", "FRESH-TEST-MARKER", "### lint: stale, exit code 1",
+		"### build: missing\n", "### vet: fresh, exit code 2", "FRESH-VET-MARKER"} {
+		if !strings.Contains(pkg, want) {
+			t.Errorf("package lacks %q", want)
+		}
+	}
+	if strings.Contains(pkg, "STALE-LINT-MARKER") {
+		t.Error("package shows the output of a stale check")
+	}
+	if i, j := strings.Index(pkg, "### lint"), strings.Index(pkg, "### vet"); i > j {
+		t.Error("saved checks outside review.checks come before the expected ones")
+	}
+
+	again, err := review.Export(t.Context(), s, repo, cfg)
+	if err != nil || again.Changed {
+		t.Errorf("repeat export = %+v, %v, want unchanged", again, err)
+	}
+	save(checkBuild, 0, "built\n")
+	third, err := review.Export(t.Context(), s, repo, cfg)
+	if err != nil || !third.Changed || third.Snapshot != 2 {
+		t.Errorf("export after a new check = %+v, %v, want snapshot 2", third, err)
+	}
+
+	write(t, dir, filepath.Join(".plait/runs", res.Run, check.Dir, "test.json"), "{broken")
+	_, err = review.Export(t.Context(), s, repo, cfg)
+	wantInvalid(t, err, "check_unreadable")
 }
 
 func checkPackage(t *testing.T, pkg, commit string) {

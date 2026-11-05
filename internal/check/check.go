@@ -6,10 +6,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -118,6 +121,33 @@ func Save(ctx context.Context, s *run.Store, repo vcs.Repo, in Input) (Result, e
 	}
 	res.Changed = true
 	return res, nil
+}
+
+// List reads the saved checks of a run directory, sorted by name.
+func List(runDir string) ([]Record, error) {
+	dir := filepath.Join(runDir, Dir)
+	entries, err := os.ReadDir(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return []Record{}, nil
+	}
+	if err != nil {
+		return nil, output.Internal(fmt.Errorf("list checks: %w", err))
+	}
+	recs := []Record{}
+	for _, e := range entries {
+		name, ok := strings.CutSuffix(e.Name(), ".json")
+		if !ok || e.IsDir() || !nameRe.MatchString(name) {
+			continue
+		}
+		r, ok := read(filepath.Join(dir, e.Name()))
+		if !ok || r.Name != name {
+			return nil, output.Invalid("check_unreadable", fmt.Sprintf("check record %s/%s is broken", Dir, e.Name()),
+				fmt.Sprintf("save the check again: plait check save %s --exit-code N < output.log", name))
+		}
+		recs = append(recs, r)
+	}
+	slices.SortFunc(recs, func(a, b Record) int { return strings.Compare(a.Name, b.Name) })
+	return recs, nil
 }
 
 // read treats a missing or unreadable record as absent, so save overwrites it.

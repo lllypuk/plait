@@ -37,6 +37,10 @@ diff --git a/a.txt b/a.txt
 +a changed
 ```
 
+## Checks
+
+No checks were saved for this snapshot.
+
 ## Answer
 
 Answer with one JSON object and nothing else, valid against the schema `review-findings/v1` below. Set `snapshot` to `0123456789abcdef0123456789abcdef01234567` and `coverage` to `diff_only`. Report each defect once with `file` and `line` in the snapshot; an empty `findings` list is a valid answer when there are none.

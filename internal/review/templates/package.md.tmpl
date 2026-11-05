@@ -50,6 +50,23 @@ These files changed but their diff is left out; do not guess what changed in the
 {{- end}}
 {{- end}}
 
+## Checks
+{{- if .Checks}}
+
+The author ran these checks and saved their results; plait does not run them. A `stale` result was saved for another working tree and says nothing about this snapshot; a `missing` one is expected by review.checks but was never saved. Do not run the checks yourself.
+{{- range .Checks}}
+
+### {{.Name}}: {{.State}}{{if ne .State "missing"}}, exit code {{.ExitCode}}{{end}}
+{{- if and (eq .State "fresh") .Output}}
+
+{{fence .Output "text"}}
+{{- end}}
+{{- end}}
+{{- else}}
+
+No checks were saved for this snapshot.
+{{- end}}
+
 ## Answer
 
 Answer with one JSON object and nothing else, valid against the schema `{{.Schema}}` below. Set `snapshot` to `{{.Commit}}` and `coverage` to `{{.Coverage}}`. Report each defect once with `file` and `line` in the snapshot; an empty `findings` list is a valid answer when there are none.

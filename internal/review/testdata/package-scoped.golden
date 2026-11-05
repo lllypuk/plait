@@ -52,6 +52,10 @@ These files changed but their diff is left out; do not guess what changed in the
 - `certs/server.pem`: excluded by audit.deny_globs
 - `testdata/big.json`: dropped, the diff is over review.max_diff_bytes (1024)
 
+## Checks
+
+No checks were saved for this snapshot.
+
 ## Answer
 
 Answer with one JSON object and nothing else, valid against the schema `review-findings/v1` below. Set `snapshot` to `0123456789abcdef0123456789abcdef01234567` and `coverage` to `criteria`. Report each defect once with `file` and `line` in the snapshot; an empty `findings` list is a valid answer when there are none.

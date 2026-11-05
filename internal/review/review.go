@@ -16,6 +16,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/lllypuk/plait/internal/check"
 	"github.com/lllypuk/plait/internal/config"
 	"github.com/lllypuk/plait/internal/output"
 	"github.com/lllypuk/plait/internal/run"
@@ -64,6 +65,7 @@ type Package struct {
 	Excluded     []string
 	Dropped      []string
 	MaxDiffBytes int
+	Checks       []Check
 	Gaps         []run.Gap
 }
 
@@ -160,23 +162,11 @@ func Export(ctx context.Context, s *run.Store, repo vcs.Repo, cfg config.Config)
 	if err != nil {
 		return ExportResult{}, output.Internal(fmt.Errorf("read task: %w", err))
 	}
-	rules, err := LoadRules(repo.Root, cfg.Review.Rules, cfg.Audit.DenyGlobs)
+	p, snap, err := buildPackage(ctx, repo, cfg, runDir)
 	if err != nil {
 		return ExportResult{}, err
 	}
-	snap, err := repo.Snapshot(ctx, cfg.Review.Base)
-	if err != nil {
-		return ExportResult{}, err
-	}
-	files, err := repo.DiffFiles(ctx, snap.Base, snap.Tree)
-	if err != nil {
-		return ExportResult{}, err
-	}
-	sc := ScopeDiff(files, cfg.Audit.DenyGlobs, cfg.Review.MaxDiffBytes)
-	p := Package{
-		Run: st.ID, Base: snap.Base, Coverage: coverage(st.Task), Task: string(taskMD), Rules: rules, Diff: sc.Diff,
-		Excluded: sc.Excluded, Dropped: sc.Dropped, MaxDiffBytes: cfg.Review.MaxDiffBytes, Gaps: gaps(sc, rules),
-	}
+	p.Run, p.Coverage, p.Task = st.ID, coverage(st.Task), string(taskMD)
 	if snap.Commit, err = commitPackage(ctx, repo, snap, p); err != nil {
 		return ExportResult{}, err
 	}
@@ -212,6 +202,32 @@ func Export(ctx context.Context, s *run.Store, repo vcs.Repo, cfg config.Config)
 		Run: st.ID, Snapshot: n, Commit: snap.Commit, Base: snap.Base, Coverage: p.Coverage, Gaps: p.Gaps,
 		Package: filepath.ToSlash(path), Changed: !reused, Step: st.Step,
 	}, nil
+}
+
+// buildPackage snapshots the working copy and collects the rules, diff and checks of the package.
+func buildPackage(ctx context.Context, repo vcs.Repo, cfg config.Config, runDir string) (Package, vcs.Snapshot, error) {
+	rules, err := LoadRules(repo.Root, cfg.Review.Rules, cfg.Audit.DenyGlobs)
+	if err != nil {
+		return Package{}, vcs.Snapshot{}, err
+	}
+	snap, err := repo.Snapshot(ctx, cfg.Review.Base)
+	if err != nil {
+		return Package{}, vcs.Snapshot{}, err
+	}
+	files, err := repo.DiffFiles(ctx, snap.Base, snap.Tree)
+	if err != nil {
+		return Package{}, vcs.Snapshot{}, err
+	}
+	saved, err := check.List(runDir)
+	if err != nil {
+		return Package{}, vcs.Snapshot{}, err
+	}
+	sc := ScopeDiff(files, cfg.Audit.DenyGlobs, cfg.Review.MaxDiffBytes)
+	checks := Checks(cfg.Review.Checks, saved, snap.Tree)
+	return Package{
+		Base: snap.Base, Rules: rules, Diff: sc.Diff, Excluded: sc.Excluded, Dropped: sc.Dropped,
+		MaxDiffBytes: cfg.Review.MaxDiffBytes, Checks: checks, Gaps: append(gaps(sc, rules), checkGaps(checks)...),
+	}, snap, nil
 }
 
 // commitPackage stamps the snapshot commit with a digest of the package, so the commit id an answer names

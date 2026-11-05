@@ -1,0 +1,101 @@
+# Review package: run 2026-11-05-order-retry, snapshot 1
+
+You are the reviewer in a fresh session. You did not write this change and you do not know why the author made it: judge only the task, the repository rules and the diff below. Do not edit files and do not run commands that change the repository.
+
+- Snapshot: `0123456789abcdef0123456789abcdef01234567`
+- Base: `89abcdef0123456789abcdef0123456789abcdef`
+- Coverage: `diff_only`
+- Coverage gaps:
+  - `checks_missing`: `build`
+  - `checks_failed`: `lint`
+  - `checks_stale`: `vet`
+
+The task has no acceptance criteria, so only the diff is checked: look for defects and violations of the repository rules. Do not invent criteria and do not set `criterion`.
+
+## Task
+
+```markdown
+# Retry failed orders
+```
+
+## Repository rules
+
+No rule files in this repository.
+
+## Diff
+
+`git diff 89abcdef0123456789abcdef0123456789abcdef 0123456789abcdef0123456789abcdef01234567`
+
+```diff
+diff --git a/a.txt b/a.txt
+--- a/a.txt
++++ b/a.txt
+@@ -1 +1 @@
+-a
++a changed
+```
+
+## Checks
+
+The author ran these checks and saved their results; plait does not run them. A `stale` result was saved for another working tree and says nothing about this snapshot; a `missing` one is expected by review.checks but was never saved. Do not run the checks yourself.
+
+### test: fresh, exit code 0
+
+```text
+ok  	example.com/orders	0.01s
+```
+
+### lint: fresh, exit code 1
+
+```text
+a.go:3:1: unused (unused)
+```
+
+### vet: stale, exit code 2
+
+### build: missing
+
+## Answer
+
+Answer with one JSON object and nothing else, valid against the schema `review-findings/v1` below. Set `snapshot` to `0123456789abcdef0123456789abcdef01234567` and `coverage` to `diff_only`. Report each defect once with `file` and `line` in the snapshot; an empty `findings` list is a valid answer when there are none.
+
+Severity: `blocker` — must not be merged; `major` — wrong behaviour or a broken rule; `minor` — a real but small problem; `nit` — style or wording.
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/lllypuk/plait/schemas/review-findings.v1.json",
+  "title": "review-findings/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["snapshot", "coverage", "findings"],
+  "properties": {
+    "snapshot": {
+      "description": "Commit id of the reviewed snapshot, copied from the package.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$"
+    },
+    "coverage": {
+      "description": "criteria: checked against the task acceptance criteria; diff_only: the task has none, only the diff was checked.",
+      "enum": ["criteria", "diff_only"]
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "severity", "file", "line", "title", "rationale"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"},
+          "severity": {"enum": ["blocker", "major", "minor", "nit"]},
+          "file": {"description": "Path from the repository root.", "type": "string", "minLength": 1},
+          "line": {"description": "Line in the snapshot; 0 when the finding is about the whole file.", "type": "integer", "minimum": 0},
+          "title": {"type": "string", "minLength": 1},
+          "rationale": {"description": "Why it is a defect and what breaks.", "type": "string", "minLength": 1},
+          "criterion": {"description": "The acceptance criterion the finding violates, quoted from the task.", "type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}
+```
