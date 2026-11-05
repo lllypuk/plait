@@ -269,3 +269,26 @@ func actionOf(ops []install.Op, item string) install.Action {
 	}
 	return ""
 }
+
+func TestRepoPlanSectionSpacing(t *testing.T) {
+	for name, before := range map[string]string{
+		"empty":        "",
+		"no newline":   "# Team",
+		"one newline":  "# Team\n",
+		"two newlines": "# Team\n\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			writeRepoFile(t, root, install.AgentsFile, before)
+			initRepo(t, root)
+			got := readRepoFile(t, root, install.AgentsFile)
+			want := "<!-- plait:begin -->\n"
+			if before != "" {
+				want = "# Team\n\n" + want
+			}
+			if !strings.HasPrefix(got, want) {
+				t.Errorf("AGENTS.md = %q", got)
+			}
+		})
+	}
+}

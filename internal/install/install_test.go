@@ -260,3 +260,35 @@ func TestWritersRegistered(t *testing.T) {
 		}
 	}
 }
+
+func TestUninstallKeepsForeignFiles(t *testing.T) {
+	d := registry(t).All()[0]
+	env := installed(t, d)
+	extra := filepath.Join(filepath.Dir(skillPath(env, d, "plait")), "notes.md")
+	if err := os.WriteFile(extra, []byte("mine\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	apply(t, plan(t, d, env, v1, true))
+	if _, err := os.Stat(skillPath(env, d, "plait")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("skill left after uninstall: %v", err)
+	}
+	assertFile(t, extra, []byte("mine\n"))
+	if _, err := os.Stat(filepath.Dir(skillPath(env, d, "plait-mr"))); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("empty skill directory left: %v", err)
+	}
+}
+
+func TestUnique(t *testing.T) {
+	const base, derived = "base", "derived"
+	ops := []install.Op{
+		{Item: "skill plait", Path: "/a", Agent: base},
+		{Item: "skill plait", Path: "/a", Agent: derived},
+		{Item: install.ItemPermissions, Path: "/a"},
+		{Item: install.ItemPermissions, Action: install.ActionWarn, Agent: base},
+		{Item: install.ItemPermissions, Action: install.ActionWarn, Agent: derived},
+	}
+	got := install.Unique(ops)
+	if len(got) != 4 || got[0].Agent != base || got[1].Item != install.ItemPermissions {
+		t.Fatalf("Unique = %+v", got)
+	}
+}

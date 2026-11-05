@@ -42,6 +42,26 @@ exists .plait/runs/PROJ-1-first/state.json
 exec git status --porcelain --untracked-files=all
 cmp stdout ../status.txt
 
+# skills plait did not write stay; the rest is installed and a human decides
+cd ..
+mkdir other
+cd other
+exec git init -q
+mkdir .claude/skills/plait .qwen/skills/plait
+cp ../own-skill.md .claude/skills/plait/SKILL.md
+cp ../own-skill.md .qwen/skills/plait/SKILL.md
+exitcode 4 plait init --json
+stdout '"code":"install_conflict","message":"2 files are not plait.s and were left in place: .claude/skills/plait/SKILL.md, .qwen/skills/plait/SKILL.md"'
+cmp .claude/skills/plait/SKILL.md ../own-skill.md
+cmp .qwen/skills/plait/SKILL.md ../own-skill.md
+exists .claude/skills/plait-review/SKILL.md
+exists .plait/config.yaml
+
+-- own-skill.md --
+---
+name: plait
+---
+my own skill
 -- team-agents.md --
 # Team rules
 

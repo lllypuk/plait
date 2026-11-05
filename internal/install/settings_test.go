@@ -3,6 +3,7 @@ package install_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/lllypuk/plait/internal/agent"
@@ -196,3 +197,45 @@ func TestSettingsInvalid(t *testing.T) {
 }
 
 func containsPath(msg, path string) bool { return len(msg) >= len(path) && msg[:len(path)] == path }
+
+func TestSettingsEmptyFile(t *testing.T) {
+	path := settingsFile(t, "\n", 0o600)
+	ops, err := writer(t, agent.WriterClaudeSettings).Plan(path, cmds())
+	single(t, ops, err, install.ActionUpdate)
+	apply(t, ops)
+	assertFile(t, path, []byte(`{
+  "permissions": {
+    "deny": [
+      "Bash(plait approve:*)",
+      "Bash(plait reject:*)"
+    ]
+  }
+}
+`))
+	info, err := os.Stat(path)
+	if err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("mode = %v, %v", info, err)
+	}
+}
+
+func TestSettingsSymlinkKept(t *testing.T) {
+	target := settingsFile(t, `{"a": 1}`, 0o644)
+	link := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	ops, err := writer(t, agent.WriterClaudeSettings).Plan(link, cmds())
+	single(t, ops, err, install.ActionUpdate)
+	apply(t, ops)
+	info, err := os.Lstat(link)
+	if err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("settings.json is no longer a symlink: %v", err)
+	}
+	b, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "Bash(plait approve:*)") {
+		t.Fatalf("target = %s", b)
+	}
+}

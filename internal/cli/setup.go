@@ -114,6 +114,7 @@ func (a *app) setup(cmd *cobra.Command, f setupFlags) (setupData, error) {
 		}
 		data.Ops = append(data.Ops, ops...)
 	}
+	data.Ops = install.Unique(data.Ops)
 	data.Agents = agents
 	if f.dryRun {
 		return data, nil

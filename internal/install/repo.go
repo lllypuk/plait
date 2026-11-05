@@ -54,23 +54,12 @@ func RepoPlan(agents []agent.Descriptor, env Env, version string) ([]Op, error) 
 		return nil, err
 	}
 	ops := []Op{cfg}
-	// A derived agent shares paths with its base; the first agent owns the file.
-	seen := map[string]bool{}
-	add := func(op Op) {
-		key := op.Item + "\x00" + op.Path
-		if op.Path == "" || !seen[key] {
-			seen[key] = true
-			ops = append(ops, op)
-		}
-	}
 	for _, d := range agents {
 		aops, planErr := Plan(d, ScopeProject, env, version, false)
 		if planErr != nil {
 			return nil, planErr
 		}
-		for _, op := range aops {
-			add(op)
-		}
+		ops = append(ops, aops...)
 	}
 	section, err := sectionOp(filepath.Join(env.Root, AgentsFile))
 	if err != nil {
@@ -90,13 +79,13 @@ func RepoPlan(agents []agent.Descriptor, env Env, version string) ([]Op, error) 
 			return nil, importErr
 		}
 		op.Agent = d.Name
-		add(op)
+		ops = append(ops, op)
 	}
 	ignore, err := ignoreOp(filepath.Join(env.Root, ignoreFile))
 	if err != nil {
 		return nil, err
 	}
-	return append(ops, ignore), nil
+	return Unique(append(ops, ignore)), nil
 }
 
 func render(name string, data any) ([]byte, error) {

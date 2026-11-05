@@ -151,6 +151,9 @@ func readSettings(path string) (*object, fs.FileMode, error) {
 	if err != nil {
 		return nil, 0, output.Internal(err)
 	}
+	if len(bytes.TrimSpace(b)) == 0 {
+		return &object{}, info.Mode().Perm(), nil
+	}
 	v, err := decode(b)
 	if err != nil {
 		return nil, 0, settingsError(path, "is not valid JSON: "+err.Error())

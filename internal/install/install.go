@@ -229,6 +229,20 @@ func permissionOps(d agent.Descriptor, scope Scope, env Env, uninstall bool) ([]
 	return ops, nil
 }
 
+// Unique drops repeated operations on one file: a derived agent shares paths with its base, the first agent owns them.
+func Unique(ops []Op) []Op {
+	seen := map[string]bool{}
+	out := make([]Op, 0, len(ops))
+	for _, op := range ops {
+		key := op.Item + "\x00" + op.Path
+		if op.Path == "" || !seen[key] {
+			seen[key] = true
+			out = append(out, op)
+		}
+	}
+	return out
+}
+
 // Apply performs the changing operations in order; with dry-run the caller skips it.
 func Apply(ops []Op) error {
 	for _, op := range ops {
@@ -248,14 +262,19 @@ func Apply(ops []Op) error {
 }
 
 func write(op Op) error {
-	if err := os.MkdirAll(filepath.Dir(op.Path), dirMode); err != nil {
+	path := op.Path
+	// The rename in WriteFile would replace a symlink, say into a dotfiles repo, with a plain file.
+	if target, err := filepath.EvalSymlinks(path); err == nil {
+		path = target
+	}
+	if err := os.MkdirAll(filepath.Dir(path), dirMode); err != nil {
 		return err
 	}
 	// WriteFile creates through a 0600 temporary file, so the mode is set after the rename.
-	if err := run.WriteFile(op.Path, op.content); err != nil {
+	if err := run.WriteFile(path, op.content); err != nil {
 		return err
 	}
-	return os.Chmod(op.Path, op.mode)
+	return os.Chmod(path, op.mode)
 }
 
 // remove deletes the file and then its directory if that became empty.
