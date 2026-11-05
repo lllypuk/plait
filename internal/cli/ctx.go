@@ -13,6 +13,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/lllypuk/plait/internal/audit"
+	"github.com/lllypuk/plait/internal/config"
 	"github.com/lllypuk/plait/internal/output"
 	"github.com/lllypuk/plait/internal/run"
 	"github.com/lllypuk/plait/internal/task"
@@ -22,9 +23,24 @@ const maxTaskSize = 1 << 20
 
 func (a *app) newCtxCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ctx",
-		Short: "Save the task context of the current run",
-		Args:  cobra.NoArgs,
+		Use:   "ctx <KEY>",
+		Short: "Tell the agent how to fetch the tracker task KEY into the current run",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			root, err := a.repoRoot()
+			if err != nil {
+				return err
+			}
+			cfg, err := config.Load(config.DefaultSources(root))
+			if err != nil {
+				return err
+			}
+			in, err := task.Fetch(run.Open(root), args[0], cfg.Jira)
+			if err != nil {
+				return err
+			}
+			return a.printer().Success(in, nextText(in))
+		},
 	}
 	cmd.AddCommand(a.newCtxSaveCmd())
 	return cmd

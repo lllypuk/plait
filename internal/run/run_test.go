@@ -258,3 +258,16 @@ func TestWriteFileReplaces(t *testing.T) {
 		}
 	}
 }
+
+func TestKeyOf(t *testing.T) {
+	for id, want := range map[string]string{
+		"PROJ-123-order-retry": "PROJ-123",
+		"A1-7-x":               "A1-7",
+		"2026-11-05-x":         "",
+		"PROJ-x":               "",
+	} {
+		if got := run.KeyOf(id); got != want {
+			t.Errorf("KeyOf(%q) = %q, want %q", id, got, want)
+		}
+	}
+}

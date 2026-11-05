@@ -2,8 +2,31 @@
 stdin task.md
 exitcode 2 plait ctx save --json
 stdout '"code":"no_current_run"'
+exitcode 2 plait ctx PROJ-7 --json
+stdout '"code":"no_current_run"'
+stdout '"fix":"plait run new <slug> --key PROJ-7"'
+exitcode 2 plait ctx proj-7 --json
+stdout '"code":"invalid_key"'
 
 exec plait run new order-retry --key PROJ-7
+
+# ctx <KEY> tells the agent how to fetch the task and where to save it
+exec plait ctx PROJ-7 --json
+stdout '"run":"PROJ-7-order-retry","step":"new"'
+stdout 'any Jira access'
+stdout '"output":\{"cmd":"plait ctx save PROJ-7 --source jira < task.md"\}'
+stdout '"guide":"plait guide ctx"'
+env PLAIT_JIRA_MCP_TOOL=jira_get_issue
+exec plait ctx PROJ-7 --json
+stdout 'MCP tool jira_get_issue'
+! stdout 'any Jira access'
+exitcode 2 plait ctx PROJ-8 --json
+stdout '"code":"key_mismatch"'
+env PLAIT_JIRA_MODE=rest
+exitcode 2 plait ctx PROJ-7 --json
+stdout '"code":"jira_mode_unsupported"'
+env PLAIT_JIRA_MODE=
+env PLAIT_JIRA_MCP_TOOL=
 
 # empty stdin is invalid input with a fix
 exitcode 2 plait ctx save --json

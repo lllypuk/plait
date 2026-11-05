@@ -29,9 +29,10 @@ const (
 const newRunFix = "plait run new <slug>"
 
 var (
-	slugRe = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
-	keyRe  = regexp.MustCompile(`^[A-Z][A-Z0-9]*-[0-9]+$`)
-	idRe   = regexp.MustCompile(`^[A-Za-z0-9]+(-[A-Za-z0-9]+)*$`)
+	slugRe  = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+	keyRe   = regexp.MustCompile(`^[A-Z][A-Z0-9]*-[0-9]+$`)
+	idKeyRe = regexp.MustCompile(`^([A-Z][A-Z0-9]*-[0-9]+)-`)
+	idRe    = regexp.MustCompile(`^[A-Za-z0-9]+(-[A-Za-z0-9]+)*$`)
 )
 
 // Step is the position of a run in the review slice.
@@ -257,6 +258,14 @@ func (s *Store) newID(slug, key string) (string, error) {
 // ValidKey reports whether key looks like a tracker key such as PROJ-123.
 func ValidKey(key string) bool {
 	return keyRe.MatchString(key)
+}
+
+// KeyOf returns the tracker key a run id starts with, or "" for a run created without --key.
+func KeyOf(id string) string {
+	if m := idKeyRe.FindStringSubmatch(id); m != nil {
+		return m[1]
+	}
+	return ""
 }
 
 // read returns an error wrapping fs.ErrNotExist when run id has no state.json.

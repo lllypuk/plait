@@ -16,6 +16,11 @@ network:
   ca_file: ""
   # URLs plait doctor --net reaches besides the model endpoints, e.g. [https://gitlab.example.internal].
   endpoints: []
+jira:
+  # Only mcp: the agent fetches the task with its own Jira access and saves it with plait ctx save.
+  mode: mcp
+  # MCP tool the agent calls to get an issue; empty: any Jira access the agent has.
+  mcp_tool: ""
 # Agents in plait-agent/v1 by name: override a built-in one (claude, qwen) field by field,
 # or describe a new one; base: <agent> takes another agent's fields first.
 agents: {}

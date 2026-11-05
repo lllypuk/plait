@@ -240,7 +240,7 @@ func TestRead(t *testing.T) {
 		{
 			name:     "list items",
 			in:       "# Retry\n\nBody.\n\n## Acceptance criteria\n\n- [ ] retry 3 times\n  with a backoff\n* [x] log it\n1. no panic\nplain line\n- [ ]\n",
-			key:      "PROJ-7",
+			key:      key,
 			title:    "PROJ-7: Retry",
 			criteria: []string{"retry 3 times with a backoff", "log it", "no panic", "plain line"},
 		},

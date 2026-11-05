@@ -30,6 +30,7 @@ type Config struct {
 	Audit   Audit   `yaml:"audit"`
 	MR      MR      `yaml:"mr"`
 	Network Network `yaml:"network"`
+	Jira    Jira    `yaml:"jira"`
 	// Agents holds raw plait-agent/v1 descriptors; agent.Load resolves them, env and flags do not set them.
 	Agents map[string]map[string]any `yaml:"agents"`
 }
@@ -58,6 +59,12 @@ type Network struct {
 	CAFile string `yaml:"ca_file"`
 	// Endpoints are the URLs plait doctor --net reaches besides the model endpoints of the agents.
 	Endpoints []string `yaml:"endpoints"`
+}
+
+// Jira configures how plait ctx gets a task from Jira.
+type Jira struct {
+	Mode    string `yaml:"mode"`
+	MCPTool string `yaml:"mcp_tool"`
 }
 
 // Sources lists the layers in ascending priority; a missing or empty file path is skipped.
